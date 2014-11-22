@@ -2,11 +2,13 @@
 # Create some volumes, networks and compute instances. 
 # Boot it all up and start testing it.
 # 
-# Joey <joseph.mcdonald@alctel-lucent.com>
+# Joey <jmcdice@gmail.com>
 
 
 function get_centos() {
    echo -n "Checking for CentOS 7 Guest VM: "
+
+   # Jump out of we already have it.
    nova image-list | grep -q centos-7 && echo "Ok" && return
 
    glance image-create --name centos-7 --is-public=true --container-format=bare --disk-format=qcow2 \
@@ -26,7 +28,7 @@ function get_centos() {
 
 function create_volume_type() {
 
-   # Create volume types and the extra specs for those volumes.
+   # Create volume types and the extra specs (QoS) for those volumes.
    name=$1
    bottom=$2
    top=$3
@@ -69,7 +71,6 @@ function wait_for_ssh() {
    echo -n "Waiting for ssh on $pub2: "
    while ! nc -w 2 -z $pub2 22 &>> /dev/null; do sleep 2; done
    echo "Ok"
-
 }
 
 function wait_for_active() {
@@ -169,10 +170,10 @@ function create_sec_group() {
 function create_networks() {
 
    echo -n "Creating Guest Networks: "
-   # This is a little more complicated but much easier to login to the provider network
+   # This is a little more complicated but much easier to login to a provider network
    # than a guest network. Doesn't require a router or floating IP's etc.
    # This should be untagged network_type:flat (rather than vlan) 
-   # Provider network is RegionOne, yours will be different probably. 
+   # Provider network is RegionOne, yours will be different, probably. 
    neutron net-create public-net --provider:network_type flat --provider:physical_network RegionOne &> /dev/null
 
    # Here, we discover the 'public' network and build a subnet pool (limited as some are in use).
@@ -247,8 +248,10 @@ function volume_tests() {
 
 function stop() {
 
-   # This blows away absolutely everything, make sure nothing else is running here.
-   echo 'stopping'
+   # !! Warning !!
+   # This blows away absolutely everything in your cluster when run as admin! Don't 
+   # run this unless you know exactly what you're doing.
+   echo 'Stopping Everything.'
    function purge_port() {
        for port in `neutron port-list -c id | egrep -v '\-\-|id' | awk '{print $2}'`
        do
@@ -303,6 +306,7 @@ function stop() {
             cinder delete ${vol}
          done
    }
+
    function purge_volume_types() {
       for type in `cinder type-list | egrep -o '[0-9a-z\-]{36}' | egrep -v '\-\-|id'`
          do 
@@ -310,7 +314,6 @@ function stop() {
             cinder type-delete ${type}
          done
    }
-
 
    function purge_instances() {
       for inst in `nova list | egrep -o '[0-9a-z\-]{36}' | egrep -v '\-\-|id'`
@@ -329,7 +332,6 @@ function stop() {
 
       cat /root/.ssh/known_hosts | egrep -v "$pub1|$pub2" > /tmp/known_hosts
       mv /tmp/known_hosts /root/.ssh/
-
    }
 
    # Stop Instances
@@ -365,5 +367,3 @@ case "$1" in
         echo $"Usage: $0 {start|stop|volume-test}"
         RETVAL=3
 esac
-
-
