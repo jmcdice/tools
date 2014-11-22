@@ -91,11 +91,11 @@ function create_volume_types() {
 
    # Create some slow volume types.
    create_volume_type low-iops-sf   800 1000 1500 solidfire
-   #create_volume_type low-iops-ceph 800 1000 1500 ceph
+   create_volume_type low-iops-ceph 800 1000 1500 ceph
 
    # Create some faster volume types.
    create_volume_type high-iops-sf   8000 10000 15000 solidfire
-   #create_volume_type high-iops-ceph 8000 10000 15000 ceph
+   create_volume_type high-iops-ceph 8000 10000 15000 ceph
 }
 
 function create_volumes() {
@@ -103,11 +103,11 @@ function create_volumes() {
    echo -n "Creating volumes: "
    # Slower vols
    cinder create --volume-type low-iops-sf   --display-name low-sf 15 &> /dev/null
-   #cinder create --volume-type low-iops-ceph --display-name low-ceph 15 &> /dev/null
+   cinder create --volume-type low-iops-ceph --display-name low-ceph 15 &> /dev/null
 
    # Faster vols
    cinder create --volume-type high-iops-sf   --display-name high-sf 15 &> /dev/null
-   #cinder create --volume-type high-iops-ceph --display-name high-ceph 15 &> /dev/null
+   cinder create --volume-type high-iops-ceph --display-name high-ceph 15 &> /dev/null
    echo "Ok"
 }
 
@@ -115,19 +115,19 @@ function attach_volumes() {
 
    # Attach the volumes we created to our instances. 
    lowsf=$(cinder list|grep low-sf|awk '{print $2}')
-   #lowceph=$(cinder list|grep low-ceph|awk '{print $2}')
+   lowceph=$(cinder list|grep low-ceph|awk '{print $2}')
 
    highsf=$(cinder list|grep high-sf|awk '{print $2}')
-   #highceph=$(cinder list|grep high-ceph|awk '{print $2}')
+   highceph=$(cinder list|grep high-ceph|awk '{print $2}')
 
    pub1=$(nova list |grep slow-pub-1|awk '{print $2}')
    pub2=$(nova list |grep fast-pub-2|awk '{print $2}')
 
    echo -n "Attaching volumes to instances: "
    nova volume-attach $pub1 $lowsf /dev/vdb &> /dev/null
-   #nova volume-attach $pub1 $lowceph /dev/vdc &> /dev/null
+   nova volume-attach $pub1 $lowceph /dev/vdc &> /dev/null
    nova volume-attach $pub2 $highsf /dev/vdb &> /dev/null
-   #nova volume-attach $pub2 $highceph /dev/vdc &> /dev/null
+   nova volume-attach $pub2 $highceph /dev/vdc &> /dev/null
    echo "Ok"
 }
 
@@ -172,12 +172,15 @@ function create_sec_group() {
 function create_networks() {
 
    echo -n "Creating Guest Networks: "
-   # This should be untagged network_type:flat (rather than vlan) physical network is RegionOne from packstack.
+   # This is a little more complicated but much easier to login to the provider network
+   # than a guest network. Doesn't require a router or floating IP's etc.
+   # This should be untagged network_type:flat (rather than vlan) 
+   # Provider network is RegionOne, yours will be different probably. 
    neutron net-create public-net --provider:network_type flat --provider:physical_network RegionOne &> /dev/null
 
    # Here, we discover the 'public' network and build a subnet pool (limited as some are in use).
    net=$(ifconfig eth1 | perl -lane 'print $1 if /addr:(.*?)\s/' | cut -d'.' -f1-3);
-   start="$net.100"
+   start="$net.200"
    end="$net.250"
    gateway=$(route -n | grep "^0\.0\.0\.0 " | awk '{print $2}')
    mask=$(ifconfig eth1|perl -lane 'print $1 if /Mask:(.*?)$/')
@@ -198,25 +201,25 @@ function partition_disks() {
    # partition disks
    echo -n "Partitioning volumes: "
    $login $pub1 'echo -e "o\nn\np\n1\n\n\nw" | sudo /usr/sbin/fdisk /dev/vdb' &> /dev/null
-   #$login $pub1 'echo -e "o\nn\np\n1\n\n\nw" | sudo /usr/sbin/fdisk /dev/vdc' &> /dev/null
+   $login $pub1 'echo -e "o\nn\np\n1\n\n\nw" | sudo /usr/sbin/fdisk /dev/vdc' &> /dev/null
    $login $pub2 'echo -e "o\nn\np\n1\n\n\nw" | sudo /usr/sbin/fdisk /dev/vdb' &> /dev/null
-   #$login $pub2 'echo -e "o\nn\np\n1\n\n\nw" | sudo /usr/sbin/fdisk /dev/vdc' &> /dev/null
+   $login $pub2 'echo -e "o\nn\np\n1\n\n\nw" | sudo /usr/sbin/fdisk /dev/vdc' &> /dev/null
    echo "Ok"
 
    # format disks
    echo -n "Formatting volumes: "
    $login $pub1 'sudo /usr/sbin/mkfs.ext4 /dev/vdb1' &> /dev/null
-   #$login $pub1 'sudo /usr/sbin/mkfs.ext4 /dev/vdc1' &> /dev/null
+   $login $pub1 'sudo /usr/sbin/mkfs.ext4 /dev/vdc1' &> /dev/null
    $login $pub2 'sudo /usr/sbin/mkfs.ext4 /dev/vdb1' &> /dev/null
-   #$login $pub2 'sudo /usr/sbin/mkfs.ext4 /dev/vdc1' &> /dev/null
+   $login $pub2 'sudo /usr/sbin/mkfs.ext4 /dev/vdc1' &> /dev/null
    echo "Ok"
 
    # mount disks
    echo -n "Mounting volumes: "
    $login $pub1 'sudo mkdir /slowsf/   && sudo mount /dev/vdb1 /slowsf/' &> /dev/null
-   #$login $pub1 'sudo mkdir /slowceph/ && sudo mount /dev/vdc1 /slowceph/' &> /dev/null
+   $login $pub1 'sudo mkdir /slowceph/ && sudo mount /dev/vdc1 /slowceph/' &> /dev/null
    $login $pub2 'sudo mkdir /fastsf/   && sudo mount /dev/vdb1 /fastsf/' &> /dev/null
-   #$login $pub2 'sudo mkdir /fastceph/ && sudo mount /dev/vdc1 /fastceph/' &> /dev/null
+   $login $pub2 'sudo mkdir /fastceph/ && sudo mount /dev/vdc1 /fastceph/' &> /dev/null
    echo "Ok"
 }
 
@@ -232,17 +235,17 @@ function volume_tests() {
    $login $pub1 'sudo dd if=/dev/zero of=/slowsf/dd.img bs=1M count=512 oflag=direct' | grep MB
    echo ""
 
-   #echo "Testing slow ceph: "
-   #$login $pub1 'sudo dd if=/dev/zero of=/slowceph/dd.img bs=1M count=512 oflag=direct' | grep MB
-   #echo ""
+   echo "Testing slow ceph: "
+   $login $pub1 'sudo dd if=/dev/zero of=/slowceph/dd.img bs=1M count=512 oflag=direct' | grep MB
+   echo ""
 
    echo "Testing fast solidfire: "
    $login $pub2 'sudo dd if=/dev/zero of=/fastsf/dd.img bs=1M count=512 oflag=direct' | grep MB
    echo ""
 
-   #echo "Testing fast ceph: "
-   #$login $pub2 'sudo dd if=/dev/zero of=/fastceph/dd.img bs=1M count=512 oflag=direct' | grep MB
-   #echo ""
+   echo "Testing fast ceph: "
+   $login $pub2 'sudo dd if=/dev/zero of=/fastceph/dd.img bs=1M count=512 oflag=direct' | grep MB
+   echo ""
 }
 
 function stop() {
