@@ -45,9 +45,6 @@ function create_volume_type() {
 
 function start() {
 
-   # Uncomment this is you're already up and running and just want to run the volume tests.
-   # volume_tests && exit
-
    # This is my main start function. Create everything and boot some VM's.
    get_centos
    create_volume_types
@@ -229,23 +226,23 @@ function volume_tests() {
    pub2=$(nova list |grep pub-2|perl -lane 'print $1 if /public-net=(.*?)\s/')
    login='ssh -q -t -oStrictHostKeyChecking=no -l centos -i /root/.ssh/smoketest_id_rsa'
 
-   echo ""
+   echo "Running Volume Tests"
 
-   echo "Testing slow solidfire: "
-   $login $pub1 'sudo dd if=/dev/zero of=/slowsf/dd.img bs=1M count=512 oflag=direct' | grep MB
-   echo ""
+   echo -n "Testing slow solidfire: "
+   $login $pub1 'sudo dd if=/dev/zero of=/slowsf/dd.img bs=1M count=512 oflag=direct' | \
+      perl -lane 'print @F[-2] . " MB/s" if/MB/'
 
-   echo "Testing slow ceph: "
-   $login $pub1 'sudo dd if=/dev/zero of=/slowceph/dd.img bs=1M count=512 oflag=direct' | grep MB
-   echo ""
+   echo -n "Testing slow ceph: "
+   $login $pub1 'sudo dd if=/dev/zero of=/slowceph/dd.img bs=1M count=512 oflag=direct' | \
+      perl -lane 'print @F[-2] . " MB/s" if/MB/'
 
-   echo "Testing fast solidfire: "
-   $login $pub2 'sudo dd if=/dev/zero of=/fastsf/dd.img bs=1M count=512 oflag=direct' | grep MB
-   echo ""
+   echo -n "Testing fast solidfire: "
+   $login $pub2 'sudo dd if=/dev/zero of=/fastsf/dd.img bs=1M count=512 oflag=direct' | \
+      perl -lane 'print @F[-2] . " MB/s" if/MB/'
 
-   echo "Testing fast ceph: "
-   $login $pub2 'sudo dd if=/dev/zero of=/fastceph/dd.img bs=1M count=512 oflag=direct' | grep MB
-   echo ""
+   echo -n "Testing fast ceph: "
+   $login $pub2 'sudo dd if=/dev/zero of=/fastceph/dd.img bs=1M count=512 oflag=direct' | \
+      perl -lane 'print @F[-2] . " MB/s" if/MB/'
 }
 
 function stop() {
@@ -361,8 +358,11 @@ case "$1" in
     stop)
         stop
         ;;
+    volume-test)
+        volume_tests
+        ;;
     *)
-        echo $"Usage: $0 {start|stop}"
+        echo $"Usage: $0 {start|stop|volume-test}"
         RETVAL=3
 esac
 
