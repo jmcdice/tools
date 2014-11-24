@@ -4,6 +4,21 @@
 # 
 # Joey <jmcdice@gmail.com>
 
+args=$*
+
+function get_backends() {
+   # Support multiple backend deployment testing specified on the cmdline
+   # If I don't have any specified on the cmdline, assume ceph.
+   # Bash argument handling leaves something to be desired.
+
+   local backends=$(echo $args | perl -lane "@b = split /,/, \$1 if /backend=(.*?)$/; for(@b) { print $_ }")
+   if [ -z "$backends" ]; then
+      backends='ceph'
+   fi
+
+   echo $backends
+}
+
 
 function get_centos() {
    echo -n "Checking for CentOS 7 Guest VM: "
@@ -62,84 +77,73 @@ function start() {
 
 function wait_for_ssh() {
 
-   pub1=$(nova list |grep pub-1|perl -lane 'print $1 if /public-net=(.*?)\s/')
-   pub2=$(nova list |grep pub-2|perl -lane 'print $1 if /public-net=(.*?)\s/')
+   slowvm=$(nova list |grep slowvm|perl -lane 'print $1 if /public-net=(.*?)\s/')
+   fastvm=$(nova list |grep fastvm|perl -lane 'print $1 if /public-net=(.*?)\s/')
 
-   echo -n "Waiting for ssh on $pub1: "
-   while ! nc -w 2 -z $pub1 22 &>> /dev/null; do sleep 2; done
+   echo -n "Waiting for ssh on $slowvm: "
+   while ! nc -w 2 -z $slowvm 22 &>> /dev/null; do sleep 2; done
    echo "Ok"
-   echo -n "Waiting for ssh on $pub2: "
-   while ! nc -w 2 -z $pub2 22 &>> /dev/null; do sleep 2; done
+   echo -n "Waiting for ssh on $fastvm: "
+   while ! nc -w 2 -z $fastvm 22 &>> /dev/null; do sleep 2; done
    echo "Ok"
-}
-
-function wait_for_active() {
-
-   while true; do
-      nova list | grep -q BUILD 
-      RET=$?
-      if [ $RET -ne 0 ]; then
-         break
-      fi
-      sleep 5
-   done
 }
 
 function create_volume_types() {
 
-   # Create some slow volume types.
-   create_volume_type low-iops-sf   800 1000 1500 solidfire
-   create_volume_type low-iops-ceph 800 1000 1500 ceph
+   backends=$(get_backends)
 
-   # Create some faster volume types.
-   create_volume_type high-iops-sf   8000 10000 15000 solidfire
-   create_volume_type high-iops-ceph 8000 10000 15000 ceph
+   for i in $backends; do
+      create_volume_type low-iops-$i 800 1000 1500 $i
+      create_volume_type high-iops-$i 8000 10000 15000 $i
+   done
 }
 
 function create_volumes() {
 
    echo -n "Creating volumes: "
-   # Slower vols
-   cinder create --volume-type low-iops-sf   --display-name low-sf 15 &> /dev/null
-   cinder create --volume-type low-iops-ceph --display-name low-ceph 15 &> /dev/null
+   backends=$(get_backends)
 
-   # Faster vols
-   cinder create --volume-type high-iops-sf   --display-name high-sf 15 &> /dev/null
-   cinder create --volume-type high-iops-ceph --display-name high-ceph 15 &> /dev/null
+   # Create a slow and a fast volume for each backend.
+   for i in $backends; do 
+      cinder create --volume-type low-iops-$i  --display-name low-$i  15 &> /dev/null
+      cinder create --volume-type high-iops-$i --display-name high-$i 15 &> /dev/null
+   done
+
    echo "Ok"
 }
 
 function attach_volumes() {
 
    # Attach the volumes we created to our instances. 
-   lowsf=$(cinder list|grep low-sf|awk '{print $2}')
-   lowceph=$(cinder list|grep low-ceph|awk '{print $2}')
-
-   highsf=$(cinder list|grep high-sf|awk '{print $2}')
-   highceph=$(cinder list|grep high-ceph|awk '{print $2}')
-
-   pub1=$(nova list |grep slow-pub-1|awk '{print $2}')
-   pub2=$(nova list |grep fast-pub-2|awk '{print $2}')
+   disk='b'
+   slowvm=$(nova list |grep slowvm|awk '{print $2}')
+   fastvm=$(nova list |grep fastvm|awk '{print $2}')
+   backends=$(get_backends)
 
    echo -n "Attaching volumes to instances: "
-   nova volume-attach $pub1 $lowsf /dev/vdb &> /dev/null
-   nova volume-attach $pub1 $lowceph /dev/vdc &> /dev/null
-   nova volume-attach $pub2 $highsf /dev/vdb &> /dev/null
-   nova volume-attach $pub2 $highceph /dev/vdc &> /dev/null
+
+   for i in $backends; do 
+      low=$(cinder list|grep low-$i|awk '{print $2}')
+      high=$(cinder list|grep high-$i|awk '{print $2}')
+
+      nova volume-attach $slowvm $low /dev/vd$disk &> /dev/null
+      nova volume-attach $fastvm $high /dev/vd$disk &> /dev/null
+      disk=$(echo $disk | tr "0-9a-z" "1-9a-z_")
+   done
    echo "Ok"
 }
 
 function boot_vms() {
 
    echo -n "Booting instances: "
-      nova boot slow-pub-1 --image $(nova image-list|grep centos-7 |awk '{print $2}') \
+      nova boot slowvm  --image $(nova image-list|grep centos-7 |awk '{print $2}') \
          --flavor $(nova flavor-list | grep default |  awk '{print $2}') \
          --nic net-id=$(neutron net-list | grep public-net| awk '{print $2}') \
          --security_groups ssh \
          --key_name smoketest \
          --availability-zone nova:compute-0-0.local  &> /dev/null
 
-      nova boot fast-pub-2 --image $(nova image-list|grep centos-7|awk '{print $2}') \
+      nova boot fastvm --image $(nova image-list|grep centos-7|awk '{print $2}') \
          --flavor $(nova flavor-list | grep default |  awk '{print $2}') \
          --nic net-id=$(neutron net-list | grep public-net| awk '{print $2}') \
          --security_groups ssh \
@@ -192,58 +196,54 @@ function create_networks() {
 
 function partition_disks() {
 
-   pub1=$(nova list |grep pub-1|perl -lane 'print $1 if /public-net=(.*?)\s/')
-   pub2=$(nova list |grep pub-2|perl -lane 'print $1 if /public-net=(.*?)\s/')
+   slowvm=$(nova list |grep slowvm|perl -lane 'print $1 if /public-net=(.*?)\s/')
+   fastvm=$(nova list |grep fastvm|perl -lane 'print $1 if /public-net=(.*?)\s/')
    login='ssh -q -t -oStrictHostKeyChecking=no -l centos -i /root/.ssh/smoketest_id_rsa'
 
-   # partition disks
-   echo -n "Partitioning volumes: "
-   $login $pub1 'echo -e "o\nn\np\n1\n\n\nw" | sudo /usr/sbin/fdisk /dev/vdb' &> /dev/null
-   $login $pub1 'echo -e "o\nn\np\n1\n\n\nw" | sudo /usr/sbin/fdisk /dev/vdc' &> /dev/null
-   $login $pub2 'echo -e "o\nn\np\n1\n\n\nw" | sudo /usr/sbin/fdisk /dev/vdb' &> /dev/null
-   $login $pub2 'echo -e "o\nn\np\n1\n\n\nw" | sudo /usr/sbin/fdisk /dev/vdc' &> /dev/null
-   echo "Ok"
+   backends=$(get_backends)
+   disk='b'
+   one='1'
 
-   # format disks
-   echo -n "Formatting volumes: "
-   $login $pub1 'sudo /usr/sbin/mkfs.ext4 /dev/vdb1' &> /dev/null
-   $login $pub1 'sudo /usr/sbin/mkfs.ext4 /dev/vdc1' &> /dev/null
-   $login $pub2 'sudo /usr/sbin/mkfs.ext4 /dev/vdb1' &> /dev/null
-   $login $pub2 'sudo /usr/sbin/mkfs.ext4 /dev/vdc1' &> /dev/null
-   echo "Ok"
+   for i in $backends; do
+      echo -n "Partitioning volumes for $i: "
+      $login $slowvm "echo -e \"o\nn\np\n1\n\n\nw\" | sudo /usr/sbin/fdisk /dev/vd$disk" &> /dev/null
+      $login $fastvm "echo -e \"o\nn\np\n1\n\n\nw\" | sudo /usr/sbin/fdisk /dev/vd$disk" &> /dev/null
+      echo "Ok"
 
-   # mount disks
-   echo -n "Mounting volumes: "
-   $login $pub1 'sudo mkdir /slowsf/   && sudo mount /dev/vdb1 /slowsf/' &> /dev/null
-   $login $pub1 'sudo mkdir /slowceph/ && sudo mount /dev/vdc1 /slowceph/' &> /dev/null
-   $login $pub2 'sudo mkdir /fastsf/   && sudo mount /dev/vdb1 /fastsf/' &> /dev/null
-   $login $pub2 'sudo mkdir /fastceph/ && sudo mount /dev/vdc1 /fastceph/' &> /dev/null
-   echo "Ok"
+      echo -n "Formatting volumes for $i: "
+      $login $slowvm "sudo /usr/sbin/mkfs.ext4 /dev/vd$disk$one" &> /dev/null
+      $login $fastvm "sudo /usr/sbin/mkfs.ext4 /dev/vd$disk$one" &> /dev/null
+      echo "Ok"
+
+      echo -n "Mounting volumes for $i: "
+      $login $slowvm "sudo mkdir /slow-$i/ && sudo mount /dev/vd$disk$one /slow-$i/" &> /dev/null
+      $login $fastvm "sudo mkdir /fast-$i/ && sudo mount /dev/vd$disk$one /fast-$i/" &> /dev/null
+      echo "Ok"
+
+      # Increment the drive letter
+      disk=$(echo $disk | tr "0-9a-z" "1-9a-z_")
+   done
 }
 
 function volume_tests() {
 
-   pub1=$(nova list |grep pub-1|perl -lane 'print $1 if /public-net=(.*?)\s/')
-   pub2=$(nova list |grep pub-2|perl -lane 'print $1 if /public-net=(.*?)\s/')
+   slowvm=$(nova list |grep slowvm|perl -lane 'print $1 if /public-net=(.*?)\s/')
+   fastvm=$(nova list |grep fastvm|perl -lane 'print $1 if /public-net=(.*?)\s/')
    login='ssh -q -t -oStrictHostKeyChecking=no -l centos -i /root/.ssh/smoketest_id_rsa'
 
    echo "Running Volume Tests"
+   backends=$(get_backends)
 
-   echo -n "Testing slow solidfire: "
-   $login $pub1 'sudo dd if=/dev/zero of=/slowsf/dd.img bs=1M count=512 oflag=direct' | \
-      perl -lane 'print @F[-2] . " MB/s" if/MB/'
+   for i in $backends; do 
+      echo -n "Testing slow $i ($slowvm): "
+      $login $slowvm "sudo dd if=/dev/zero of=/slow-$i/dd.img bs=1M count=512 oflag=direct" | \
+         grep MB | awk '{ print $8, $9 }'
 
-   echo -n "Testing slow ceph: "
-   $login $pub1 'sudo dd if=/dev/zero of=/slowceph/dd.img bs=1M count=512 oflag=direct' | \
-      perl -lane 'print @F[-2] . " MB/s" if/MB/'
+      echo -n "Testing fast $i ($fastvm): "
+      $login $fastvm "sudo dd if=/dev/zero of=/fast-$i/dd.img bs=1M count=512 oflag=direct" | \
+         grep MB | awk '{ print $8, $9 }'
+   done
 
-   echo -n "Testing fast solidfire: "
-   $login $pub2 'sudo dd if=/dev/zero of=/fastsf/dd.img bs=1M count=512 oflag=direct' | \
-      perl -lane 'print @F[-2] . " MB/s" if/MB/'
-
-   echo -n "Testing fast ceph: "
-   $login $pub2 'sudo dd if=/dev/zero of=/fastceph/dd.img bs=1M count=512 oflag=direct' | \
-      perl -lane 'print @F[-2] . " MB/s" if/MB/'
 }
 
 function stop() {
@@ -361,9 +361,16 @@ case "$1" in
         stop
         ;;
     volume-test)
-        volume_tests
+        volume_tests 
+        exit
         ;;
     *)
-        echo $"Usage: $0 {start|stop|volume-test}"
+        echo ""
+        echo $"Usage: $0 {start|stop|volume-test|<backend=ceph,solidfire>}"
+        echo ""
+        echo "Examples: "
+        echo "   ./volume-perf-test.sh start backend=solidfire,ceph"
+        echo "   ./volume-perf-test.sh volume-test backend=solidfire,ceph"
+        echo ""
         RETVAL=3
 esac
