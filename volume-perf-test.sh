@@ -86,6 +86,9 @@ function wait_for_ssh() {
    echo -n "Waiting for ssh on $fastvm: "
    while ! nc -w 2 -z $fastvm 22 &>> /dev/null; do sleep 2; done
    echo "Ok"
+
+   # Now that ssh is up, wait for cloud-init to pull the keys from nova.
+   sleep 5
 }
 
 function create_volume_types() {
@@ -130,6 +133,9 @@ function attach_volumes() {
       nova volume-attach $fastvm $high /dev/vd$disk &> /dev/null
       disk=$(echo $disk | tr "0-9a-z" "1-9a-z_")
    done
+
+   # Allow the volumes to attach in the Guest OS
+   sleep 6
    echo "Ok"
 }
 
@@ -165,8 +171,8 @@ function create_sec_group() {
       --protocol icmp ssh &> /dev/null
 
    # Add an ssh key
-   ssh-keygen -N '' -f ~/.ssh/smoketest_id_rsa &> /dev/null
-   nova keypair-add --pub-key ~/.ssh/smoketest_id_rsa.pub smoketest &> /dev/null
+   ssh-keygen -N '' -f ~/.ssh/smoketest_id_rsa  &> /dev/null
+   nova keypair-add --pub-key ~/.ssh/smoketest_id_rsa.pub smoketest 
 
    echo "Ok"
 }
@@ -206,18 +212,19 @@ function partition_disks() {
 
    for i in $backends; do
       echo -n "Partitioning volumes for $i: "
-      $login $slowvm "echo -e \"o\nn\np\n1\n\n\nw\" | sudo /usr/sbin/fdisk /dev/vd$disk" &> /dev/null
-      $login $fastvm "echo -e \"o\nn\np\n1\n\n\nw\" | sudo /usr/sbin/fdisk /dev/vd$disk" &> /dev/null
+
+      $login $slowvm "echo -e 'o\nn\np\n1\n\n\nw' | sudo /usr/sbin/fdisk /dev/vd$disk"  &> /dev/null
+      $login $fastvm "echo -e 'o\nn\np\n1\n\n\nw' | sudo /usr/sbin/fdisk /dev/vd$disk"  &> /dev/null
       echo "Ok"
 
       echo -n "Formatting volumes for $i: "
-      $login $slowvm "sudo /usr/sbin/mkfs.ext4 /dev/vd$disk$one" &> /dev/null
-      $login $fastvm "sudo /usr/sbin/mkfs.ext4 /dev/vd$disk$one" &> /dev/null
+      $login $slowvm "sudo /usr/sbin/mkfs.ext4 /dev/vd$disk$one"  &> /dev/null
+      $login $fastvm "sudo /usr/sbin/mkfs.ext4 /dev/vd$disk$one"  &> /dev/null
       echo "Ok"
 
       echo -n "Mounting volumes for $i: "
-      $login $slowvm "sudo mkdir /slow-$i/ && sudo mount /dev/vd$disk$one /slow-$i/" &> /dev/null
-      $login $fastvm "sudo mkdir /fast-$i/ && sudo mount /dev/vd$disk$one /fast-$i/" &> /dev/null
+      $login $slowvm "sudo mkdir /slow-$i/ && sudo mount /dev/vd$disk$one /slow-$i/"  &> /dev/null
+      $login $fastvm "sudo mkdir /fast-$i/ && sudo mount /dev/vd$disk$one /fast-$i/"  &> /dev/null
       echo "Ok"
 
       # Increment the drive letter
