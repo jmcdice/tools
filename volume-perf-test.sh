@@ -332,14 +332,14 @@ function stop() {
 
    function purge_known_hosts() {
 
-      # Delete existing guest host profiles so they don't interfere with the next
+      # Delete existing guest host keys so they don't interfere with the next
       # round of testing.
-      pub1=$(nova list |grep pub-1|perl -lane 'print $1 if /public-net=(.*?)\s/')
-      pub2=$(nova list |grep pub-2|perl -lane 'print $1 if /public-net=(.*?)\s/')
-
-      cat /root/.ssh/known_hosts | egrep -v "$pub1|$pub2" > /tmp/known_hosts
-      mv /tmp/known_hosts /root/.ssh/
+      for ip in `nova list|perl -lane 'print $1 if /public-net=(.*?)\s/'`; do
+         ssh-keygen -f '/root/.ssh/known_hosts' -R $ip &> /dev/null
+      done
+      rm -f /root/.ssh/known_hosts.old
    }
+
 
    # Stop Instances
    purge_known_hosts
