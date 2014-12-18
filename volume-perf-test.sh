@@ -108,8 +108,8 @@ function create_volumes() {
 
    # Create a slow and a fast volume for each backend.
    for i in $backends; do 
-      cinder create --volume-type low-iops-$i  --display-name low-$i  15 &> /dev/null
-      cinder create --volume-type high-iops-$i --display-name high-$i 15 &> /dev/null
+      cinder create --volume-type low-iops-$i  --display-name low-$i  15 
+      cinder create --volume-type high-iops-$i --display-name high-$i 15 
    done
 
    echo "Ok"
