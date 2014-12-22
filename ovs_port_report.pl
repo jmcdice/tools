@@ -50,6 +50,7 @@ sub get_neutron_ports() {
    my $query = "select id from ports where device_owner not like 'network:dhcp'";
 
    for (`$cmd -e "$query"`) {
+      next unless /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
       my $port = "qvo" . substr( $_, 0, 11 );
       push @ovs_ports, $port;
    }
