@@ -15,7 +15,12 @@ for ( get_neutron_ports() ) {
 }
 
 for my $dport ( get_deployed_ports() ) {
-   print "Unassociated port: $dport\n" unless ( $aports{$dport} )
+
+   if ( $aports{$dport} ) {
+      print "$dport: Ok\n";
+   } else {
+      print "$dport: Fail!\n"
+   }
 }
 
 sub get_deployed_ports() {
