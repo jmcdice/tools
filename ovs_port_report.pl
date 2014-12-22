@@ -7,8 +7,13 @@
 # 
 
 use strict;
+use Getopt::Long;
+use vars qw( $debug );
+
+GetOptions( "debug" => \$debug );
 
 my %aports; # Active ports in Neutron
+my $fail;   # Added for nagios compat
 
 for ( get_neutron_ports() ) {
    $aports{$_}++
@@ -17,14 +22,23 @@ for ( get_neutron_ports() ) {
 for my $dport ( get_deployed_ports() ) {
 
    if ( $aports{$dport} ) {
-      print "$dport: Ok\n";
+      print "$dport: Ok\n" if ($debug);
    } else {
-      print "$dport: Fail!\n"
+      print "CRIT: $dport\n";
+      $fail++
    }
+}
+
+if ( $fail ) {
+   exit 2; # We detected a non-valid port.
+} else {
+   exit 0; # All is well
 }
 
 sub get_deployed_ports() {
 
+   # Make a list of ports that actually exist in this cluster.
+   # If any ports here don't exist in neutron, spit out an alert.
    my @ports;
    for ( `rocks run host compute 'ovs-vsctl show|grep Port | grep qvo'` ) {
       push @ports, $1 if (/(qvo.*?)\"/);
@@ -34,6 +48,7 @@ sub get_deployed_ports() {
 
 sub get_neutron_ports() {
 
+   # Make a list of ports which exist in Neutron.
    my @neutron_ports = `ssh os-controller 'neutron port-list'`;
    my @ovs_ports;
 
@@ -57,3 +72,4 @@ sub get_neutron_ports() {
    }
    return @ovs_ports;
 }
+
