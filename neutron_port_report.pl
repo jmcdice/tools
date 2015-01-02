@@ -1,52 +1,64 @@
 #!/usr/bin/perl
-# Neutron port report. 
-# Tell me how many ports there are in neutron that aren't associated with a VM.
+#
+# Look in OVS and see if we have any orphaned ports.
+# Orphans are ports configured in OVS by neutron, that no longer exist in neutron.
+# Run me from a rocks frontend.
 # Joey <jmcdice@gmail.com>
 
 use strict;
-my @ports = `neutron port-list -c id -c fixed_ips`;
-my (@ips, @mess, @orphans, %totals, $port_total, $nets);
+use Getopt::Long;
+use vars qw( $debug );
 
-for my $ip (`neutron port-list -c fixed_ips|grep subnet | awk '{print \$5}'`) {
-   chomp $ip;
-   $ip =~ s/\"|\}//g;
-   push @mess, $ip;
-   $port_total++
-}
+GetOptions( "debug" => \$debug );
+my %aports; # Active ports in Neutron
+my $fail;
 
-@ips = uniq(@mess);
-my @nova = `nova list --all-tenants`;
+for ( get_neutron_ports() ) { $aports{$_}++ }
 
-for my $ip (@ips) {
-   for (@nova) {
-      if (/\b$ip\b/) {
-         $totals{$ip}++
-      }
+
+for my $dport ( get_deployed_ports() ) {
+   if ( $aports{$dport} ) {
+      print "$dport: Ok\n" if ($debug);
+   } else {
+      print "CRIT: $dport\n";
+      $fail++
    }
 }
 
-for my $ip (@ips) {
-   unless ( $totals{$ip} ) {
-      for (@ports) {
-         push @orphans, $_ if /\b$ip\b/
-      }
+exit 2 if ( $fail ); # We detected a non-valid port.
+print "OK | All is well\n";
+exit 0; # All is well
+
+sub get_deployed_ports() {
+   my @ports;
+   my $external_command=`/opt/rocks/bin/rocks run host compute 'ovs-vsctl show | grep Port | grep qvo' & ssh=\$! ; wait ; kill \$ssh`;
+
+   for ( $external_command ) {
+      push @ports, $1 if (/(qvo.*?)\"/);
    }
+   return @ports;
 }
 
-# There is one dhcp interface in neutron which we need to subtract from each network.
-for ( `neutron net-list` ) {
-   next unless /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
-   $nets++
+sub get_neutron_ports() {
+
+   # Make a list of ports which exist in Neutron.
+   my ($user, $pass, $host, $db);
+   my @ovs_ports;
+
+   # Take the mysql creds dynamically. Cool.
+   my $external_command = `/usr/bin/ssh -q os-network 'cat /etc/neutron/neutron.conf|grep "^connection.*mysql"' & ssh=\$! ; wait ; kill \$ssh`;
+   for ( $external_command ) {
+      ($user, $pass, $host, $db) = ($1, $2, $3, $4) if (/mysql:\/\/(.*?):(.*?)\@(.*?)\/(.*?)$/);
+   }
+
+   my $cmd = "mysql -u $user -p$pass -h $host $db";
+   my $query = "select id from ports where device_owner not like 'network:dhcp'";
+
+
+   for (`$cmd -e "$query"`) {
+      next unless /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
+      my $port = "qvo" . substr( $_, 0, 11 );
+      push @ovs_ports, $port;
+   }
+   return @ovs_ports;
 }
-   
-my $count = scalar @orphans;
-$count = $count - $nets;
-
-print "There are $count orphaned neutron ports from a total of $port_total ports.\n";
-
-sub uniq {
-    my %seen;
-    grep !$seen{$_}++, @_;
-}
-
-
