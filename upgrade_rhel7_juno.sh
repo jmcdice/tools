@@ -1,4 +1,3 @@
-
 # Turn me into a RHEL 7 node with Juno.
 # Yossi keeps messing up so, time to automate this whole thing.
 # Joey <jmcdice@gmail.com>
@@ -199,6 +198,12 @@ function progressfilt() {
     done
 }
 
+function sync_juno_and_friends() {
+
+
+
+}
+
 
 reset_ceph
 backup_repo
@@ -208,3 +213,8 @@ setup_el7
 pxe_boot_computes
 fix_grub_and_reboot
 wait_for_boot
+
+
+sync_juno_and_friends
+
+
