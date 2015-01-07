@@ -280,17 +280,36 @@ function add_public_storage_ips() {
    echo "Ok"
 }
 
-#reset_ceph
-#backup_repo
-#get_rhel7
-#clean_repo
-#setup_el7
-#pxe_boot_computes
-#fix_grub_and_reboot
-#wait_for_boot
-#sync_juno_and_friends
-#create_juno_repo
-#mount_apps_share
-#install_python_ceph_puppet
+function create_ceph() {
+
+   echo -n "Setting up Ceph: "
+   cd /export/
+   grep ceph_ng initialize_cluster.pl|head -2 > /tmp/setup_ceph.pl
+   echo "check_ceph_setup();" >> /tmp/setup_ceph.pl
+   cat initialize_cluster.pl | perl -lane 'if ( /^sub check_ceph/ ... /^\}/) { print }' >> /tmp/setup_ceph.pl
+   perl -pi -e 's/&>> \$mainlogfile//' /tmp/setup_ceph.pl
+   cat /tmp/setup_ceph.pl | grep -v html > /export/setup_ceph.pl
+
+   perl /export/setup_ceph.pl
+   python /export/apps/ceph/ceph_pool_deploy.py mgmt
+   rocks run host compute 'yum -y install ceph-fuse'
+   rocks run host compute command='ceph-fuse --admin-socket=/var/run/ceph/fuse.asok /cloudfs -o rw'
+
+   echo "Ok"
+}
+
+reset_ceph
+backup_repo
+get_rhel7
+clean_repo
+setup_el7
+pxe_boot_computes
+fix_grub_and_reboot
+wait_for_boot
+sync_juno_and_friends
+create_juno_repo
+mount_apps_share
+install_python_ceph_puppet
 add_public_storage_ips
+create_ceph
 
