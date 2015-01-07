@@ -3,6 +3,17 @@
 # Joey <jmcdice@gmail.com>
 
 
+function stop_ha() {
+
+   echo -n "Stopping HA services: "
+   service pacemaker stop &> /dev/null
+   service puppetmaster stop &> /dev/null
+   service haproxy stop &> /dev/null
+
+   ssh vm-manager-0-0 'service pacemaker stop' &> /dev/null
+   echo "Ok"
+}
+
 function reset_ceph() {
 
    # Wipe out ceph
@@ -88,9 +99,9 @@ function pxe_boot_computes() {
 
 function pxeboot() {
 
-   /usr/bin/ipmitool -I lanplus -H $1 -U hp -P password chassis bootdev pxe;  sleep 6
-   /usr/bin/ipmitool -I lanplus -H $1 -U hp -P password chassis power off; sleep 6
-   /usr/bin/ipmitool -I lanplus -H $1 -U hp -P password chassis power on 
+   /usr/bin/ipmitool -I lanplus -H $1 -U hp -P password chassis bootdev pxe;  sleep 6 &> /dev/null
+   /usr/bin/ipmitool -I lanplus -H $1 -U hp -P password chassis power off; sleep 6 &> /dev/null
+   /usr/bin/ipmitool -I lanplus -H $1 -U hp -P password chassis power on &> /dev/null
 }
 
 function fix_grub_and_reboot() {
@@ -105,6 +116,7 @@ function fix_grub_and_reboot() {
 
          RET=$?
          if [ $RET -eq 0 ]; then
+            sleep 20
             install_grub $compute
             break
          else 
@@ -256,6 +268,16 @@ function install_python_ceph_puppet() {
    echo "Ok"
 }
 
+function pingcheck() {
+
+   ip=$1
+   ping -c 2 $ip &> /dev/null
+   if [ $? -ne 0 ]; then
+      echo ""
+      echo "FAIL unable to ping: $ip."
+      exit 255
+   fi
+}
 function add_public_storage_ips() {
 
    echo -n "Setting public and storage IP's: "
@@ -274,6 +296,10 @@ function add_public_storage_ips() {
       end=$(host $compute|awk -F. '{print $NF}')
       ssh $compute "ifconfig $pub $lan.$count netmask 255.255.255.0"
       ssh $compute "ifconfig $str 10.2.0.$end netmask 255.255.255.0"
+
+      pingcheck $lan.$count
+      pingcheck 10.2.0.$end
+
    count=$[count + 1]
    done
 
@@ -355,6 +381,7 @@ function start_management_vms() {
    echo "Ok"
 }
 
+stop_ha
 reset_ceph
 backup_repo
 get_rhel7
