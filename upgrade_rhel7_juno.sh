@@ -304,6 +304,57 @@ function mount_ceph_fuse() {
    echo "Ok"
 }
 
+function reset_rocks_repo() {
+
+   echo -n "Restoring RHEL 6.5 Repo: "
+   rocks remove roll RHEL &> /dev/null
+   rocks add roll /export/rolls/RHEL-6.5-0.x86_64.disk1.iso &> /dev/null
+   rocks enable roll RHEL &> /dev/null
+   rocks enable roll web-server &> /dev/null
+   rocks enable roll ganglia &> /dev/null
+   rocks enable roll alu-fe &> /dev/null
+   rocks enable roll puppet &> /dev/null
+   rocks enable roll nagios &> /dev/null
+   rocks create distro &> /dev/null
+   echo "Ok"
+}
+
+function start_management_vms() {
+
+   echo "Installing Management VMs"
+   echo ""
+   service puppetmaster stop &> /dev/null
+   service pacemaker stop &> /dev/null
+   ssh vm-manager-0-0 'service pacemaker stop' &> /dev/null
+   perl /export/ci/tools/insert_vms.pl /export/kvm/templates/defaultTemplate/management_vms.csv &> /dev/null
+
+   def='http://joey-build.cloud-band.com/iso/defaultTemplate-v23.qcow2'
+   exp='/export/kvm/templates/defaultTemplate/defaultTemplate-v23.qcow2'
+
+   if [ ! -e $exp ]; then
+      echo "Downloading RHEL 7 Service Template"
+      wget --progress=bar:force $def -O $exp 2>&1 | progressfilt
+   fi
+
+   perl -pi -e 's/defaultTemplate-v22.qcow2/defaultTemplate-v23.qcow2/' /export/apps/initialize_cluster/enable_kvm_vms.pl
+   modprobe kvm; modprobe kvm_intel
+   ssh vm-manager-0-0 'modprobe kvm; modprobe kvm_intel'
+   perl /export/apps/initialize_cluster/add_libvirt_sec.pl --client client.libvirt --pool mgmt &> /dev/null
+
+   cd /export/apps/qemu/ && dir -1 | perl -lane 'system "rpm -e --nodeps $1" if (/(.*?)-\d.*?/)' &> /dev/null
+   rpm -e qemu-img-rhev qemu-kvm-rhev &> /dev/null
+   rpm -Uvh /export/apps/qemu/*.rpm &> /dev/null
+   service libvirtd restart &> /dev/null
+
+   ssh vm-manager-0-0 "cd /share/apps/qemu/ && dir -1 | perl -lane 'system qq|rpm -e --nodeps \$1| if (/(.*?)-\d.*?/)'" &> /dev/null
+   ssh vm-manager-0-0 'rpm -e qemu-img-rhev qemu-kvm-rhev' &> /dev/null
+   ssh vm-manager-0-0 'rpm -Uvh /share/apps/qemu/*.rpm' &> /dev/null
+   ssh vm-manager-0-0 'service libvirtd restart' &> /dev/null
+
+   perl /export/apps/initialize_cluster/enable_kvm_vms.pl &> /dev/null
+   echo "Ok"
+}
+
 reset_ceph
 backup_repo
 get_rhel7
@@ -319,3 +370,5 @@ install_python_ceph_puppet
 add_public_storage_ips
 create_storage_cluster
 mount_ceph_fuse
+reset_rocks_repo
+start_management_vms
