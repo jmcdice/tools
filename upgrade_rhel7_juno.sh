@@ -385,6 +385,24 @@ function start_management_vms() {
    echo "Ok"
 }
 
+function config_yum_aluvm() {
+
+   # Currently here..
+
+   echo -n "Configuring Yum on System VM's: "
+   rocks list host alu-vm|perl -lane 'system "ssh $1 hostname $1" if /^(.*?):/' 
+   rocks run host alu-vm 'systemctl stop cloud-init'
+   rocks run host alu-vm command='rm -f /etc/yum.repos.d/*.repo'
+   rocks run host alu-vm command='sed -i "s/gpgcheck=1/gpgcheck=0/" /etc/yum.conf'
+   rocks run host alu-vm compute 'rm -f /etc/yum.repos.d/*'
+   rocks list host alu-vm compute | perl -lane 'system "scp -q /tmp/mega.repo $1:/etc/yum.repos.d/" if /^(.*?):/'
+   rocks run host alu-vm command='yum -y install patch puppet'
+   rm -f /etc/cluster/cluster.conf
+   echo "Ok"
+
+}
+
+
 stop_ha
 reset_ceph
 backup_repo
@@ -403,3 +421,4 @@ create_storage_cluster
 mount_ceph_fuse
 reset_rocks_repo
 start_management_vms
+
