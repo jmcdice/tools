@@ -136,10 +136,9 @@ function install_grub() {
    rsync -aP -e 'ssh -p 2200' $rpms/grub2*.rpm $compute:/mnt/sysimage/ &> /dev/null
    rsync -aP -e 'ssh -p 2200' $rpms/os-prober-1.58-5.el7.x86_64.rpm $compute:/mnt/sysimage/ &> /dev/null
 
-
    cat <<EOF> /root/grub
 GRUB_TIMEOUT=5
-GRUB_DISTRIBUTOR="$(sed 's, release .*$,,g' /etc/system-release)"
+GRUB_DISTRIBUTOR="\$(sed 's, release .*$,,g' /etc/system-release)"
 GRUB_DEFAULT=saved
 GRUB_DISABLE_SUBMENU=true
 GRUB_TERMINAL_OUTPUT="console"
@@ -261,7 +260,7 @@ function install_python_ceph_puppet() {
    echo "Installing Python, Ceph and Puppet: "
    rocks run host compute command='perl -pi -e "s/gpgcheck=1/gpgcheck=0/" /etc/yum.conf'
    rocks run host compute 'yum -y install python-IPy.noarch python-paramiko.noarch python-crypto python-netifaces netcf-libs ethtool' &> /dev/null
-   rocks run host compute 'yum clean all'
+   rocks run host compute 'yum clean all' &> /dev/null
    rocks run host compute 'yum -y install ceph puppet' &> /dev/null
    sed -i 's/timeout=30//' /share/apps/ceph/ceph_ng/deploy_osds.py
 
@@ -274,7 +273,7 @@ function pingcheck() {
    ping -c 2 $ip &> /dev/null
    if [ $? -ne 0 ]; then
       echo ""
-      echo "FAIL unable to ping: $ip."
+      echo "FATAL unable to ping: $ip."
       exit 255
    fi
 }
@@ -293,11 +292,16 @@ function add_public_storage_ips() {
 
    for compute in `rocks list host compute | perl -lane 'print $1 if /(compute.*?):/'`
    do
+      # Reload interface drivers, otherwise ping doesn't always work.
+      driver=$(ssh $compute "ethtool -i $pub"|grep driver|awk '{print $2}')
       end=$(host $compute|awk -F. '{print $NF}')
+      ssh $compute "nohup rmmod $driver; modprobe $driver"
+      sleep 5
+
+
       ssh $compute "ifconfig $pub $lan.$count netmask 255.255.255.0"
       ssh $compute "ifconfig $str 10.2.0.$end netmask 255.255.255.0"
 
-      pingcheck $lan.$count
       pingcheck 10.2.0.$end
 
    count=$[count + 1]
@@ -325,8 +329,8 @@ function create_storage_cluster() {
 function mount_ceph_fuse() {
 
    echo -n "Mounting ceph-fuse: "
-   rocks run host compute 'yum -y install ceph-fuse'
-   rocks run host compute command='ceph-fuse --admin-socket=/var/run/ceph/fuse.asok /cloudfs -o rw'
+   rocks run host compute 'yum -y install ceph-fuse' &> /dev/null
+   rocks run host compute command='ceph-fuse --admin-socket=/var/run/ceph/fuse.asok /cloudfs -o rw' &> /dev/null
    echo "Ok"
 }
 
