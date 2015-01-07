@@ -200,21 +200,97 @@ function progressfilt() {
 
 function sync_juno_and_friends() {
 
+   echo -n "Checking for the Juno roll: "
+   # Aquire the RHEL 7 roll.
+   if [ -e /export/rolls/juno_bundle.tgz ]
+   then
+      echo "Ok"
+   else
+      echo "Downloading"
+      tgz='http://joey-build.cloud-band.com/el7/juno_bundle.tgz'
+      wget --progress=bar:force $tgz -O /export/rolls/juno_bundle.tgz 2>&1 | progressfilt
+      echo "Download Complete"
 
-
+      cd /export/rolls/
+      tar -zxf juno_bundle.tgz
+      mv /export/rolls/juno/ /var/www/html/
+      chown -R apache:apache /var/www/html/juno/
+   fi
 }
 
+function create_juno_repo() {
 
-reset_ceph
-backup_repo
-get_rhel7
-clean_repo
-setup_el7
-pxe_boot_computes
-fix_grub_and_reboot
-wait_for_boot
+   echo -n "Creating a Juno/RHEL 7 repo: "
+   cd /var/www/html/juno/
+   createrepo . &> /dev/null
 
+   cat <<EOF> /tmp/mega.repo
+[EL7-Juno]
+name=Juno Repo
+baseurl=http://10.1.1.1/juno/
+assumeyes=1
+gpgcheck=0
+EOF
 
-sync_juno_and_friends
+   rocks list host compute |perl -lane 'system "scp -q /tmp/mega.repo $1:/etc/yum.repos.d/" if /^(.*?):/'
 
+   echo "Ok"
+}
+
+function mount_apps_share() {
+
+   echo -n "Mounting NFS share: "
+   rocks run host compute 'mkdir -p /share/apps/ && mount 10.1.1.1:/state/partition1/apps/ /share/apps/'
+   echo "Ok"
+}
+
+function install_python_ceph_puppet() {
+
+   echo "Installing Python, Ceph and Puppet: "
+   rocks run host compute command='perl -pi -e "s/gpgcheck=1/gpgcheck=0/" /etc/yum.conf'
+   rocks run host compute 'yum -y install python-IPy.noarch python-paramiko.noarch python-crypto python-netifaces netcf-libs ethtool' &> /dev/null
+   rocks run host compute 'yum clean all'
+   rocks run host compute 'yum -y install ceph puppet' &> /dev/null
+   sed -i 's/timeout=30//' /share/apps/ceph/ceph_ng/deploy_osds.py
+
+   echo "Ok"
+}
+
+function add_public_storage_ips() {
+
+   echo -n "Setting public and storage IP's: "
+   lan=$(ifconfig br1|perl -lane 'print $1 if /addr:(.*?)\s.*?Mask.*?/' |cut -d'.' -f1-3)
+   pub=$(rocks list host interface compute-0-0|grep public|awk '{print $2}')
+
+   # This is some badass bash foo right here.
+   str=$(dmidecode|grep Product|awk -F: '{print $2}'|head -1| \
+         perl -lane 'system qq|grep "@F" /export/apps/common/perl/ALU/common/ACID.pm|'| \
+         grep storage|perl -lane 'print $1 if /(eth\d)/')
+
+   count='50'
+
+   for compute in `rocks list host compute | perl -lane 'print $1 if /(compute.*?):/'`
+   do
+      end=$(host $compute|awk -F. '{print $NF}')
+      ssh $compute "ifconfig $pub $lan.$count netmask 255.255.255.0"
+      ssh $compute "ifconfig $str 10.2.0.$end netmask 255.255.255.0"
+   count=$[count + 1]
+   done
+
+   echo "Ok"
+}
+
+#reset_ceph
+#backup_repo
+#get_rhel7
+#clean_repo
+#setup_el7
+#pxe_boot_computes
+#fix_grub_and_reboot
+#wait_for_boot
+#sync_juno_and_friends
+#create_juno_repo
+#mount_apps_share
+#install_python_ceph_puppet
+add_public_storage_ips
 
