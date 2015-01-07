@@ -280,9 +280,9 @@ function add_public_storage_ips() {
    echo "Ok"
 }
 
-function create_ceph() {
+function create_storage_cluster() {
 
-   echo -n "Setting up Ceph: "
+   echo -n "Creating Storage Cluster: "
    cd /export/
    grep ceph_ng initialize_cluster.pl|head -2 > /tmp/setup_ceph.pl
    echo "check_ceph_setup();" >> /tmp/setup_ceph.pl
@@ -290,11 +290,17 @@ function create_ceph() {
    perl -pi -e 's/&>> \$mainlogfile//' /tmp/setup_ceph.pl
    cat /tmp/setup_ceph.pl | grep -v html > /export/setup_ceph.pl
 
-   perl /export/setup_ceph.pl
-   python /export/apps/ceph/ceph_pool_deploy.py mgmt
+   perl /export/setup_ceph.pl &> /dev/null
+   python /export/apps/ceph/ceph_pool_deploy.py mgmt &> /dev/null
+
+   echo "Ok"
+}
+
+function mount_ceph_fuse() {
+
+   echo -n "Mounting ceph-fuse: "
    rocks run host compute 'yum -y install ceph-fuse'
    rocks run host compute command='ceph-fuse --admin-socket=/var/run/ceph/fuse.asok /cloudfs -o rw'
-
    echo "Ok"
 }
 
@@ -311,5 +317,5 @@ create_juno_repo
 mount_apps_share
 install_python_ceph_puppet
 add_public_storage_ips
-create_ceph
-
+create_storage_cluster
+mount_ceph_fuse
