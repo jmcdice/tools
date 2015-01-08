@@ -508,14 +508,14 @@ function start_packstack() {
 
 }
 
-#stop_ha
-#reset_ceph
-#backup_repo
-#get_rhel7
-#clean_repo
-#setup_el7
-#pxe_boot_computes
-#fix_grub_and_reboot
+stop_ha
+reset_ceph
+backup_repo
+get_rhel7
+clean_repo
+setup_el7
+pxe_boot_computes
+fix_grub_and_reboot
 wait_for_boot compute
 sync_juno_and_friends
 create_juno_repo
