@@ -177,9 +177,10 @@ EOF
 
 function wait_for_boot() {
 
-   echo -n "Waiting for computes to reboot: "
+   computes=$1
+   echo -n "Waiting for $computes to reboot: "
    while true; do
-      rocks run host compute date &> /dev/null
+      rocks run host $computes date &> /dev/null
       RET=$?
       if [ $RET -eq 0 ]; then
          echo "Ok"
@@ -279,6 +280,32 @@ function pingcheck() {
       exit 255
    fi
 }
+
+function create_interface_config() {
+
+
+   dev=$1 ip=$2 nm=$3 mtu=$4 host=$5
+
+   mac=$(ssh $host "grep HWADDR /etc/sysconfig/network-scripts/ifcfg-$dev" | awk -F\" '{ print $2 }')
+
+   cat <<EOF>/tmp/ifcfg-$dev
+DEVICE="$dev"
+BOOTPROTO="static"
+HWADDR="$mac"
+IPADDR="$ip"
+NETMASK="$nm"
+NM_CONTROLLED="yes"
+ONBOOT="yes"
+TYPE="Ethernet"
+MTU="$mtu"
+EOF
+
+   scp -q /tmp/ifcfg-$dev $host:/etc/sysconfig/network-scripts/
+   rm /tmp/ifcfg-$dev
+   ssh $host "ifconfig $dev $ip netmask $nm"
+   ssh $host "ifconfig $dev mtu $mtu"
+}
+
 function add_public_storage_ips() {
 
    echo -n "Setting public and storage IP's: "
@@ -301,13 +328,13 @@ function add_public_storage_ips() {
       sdriver=$(ssh $compute "ethtool -i $str"|grep driver|awk '{print $2}')
       end=$(host $compute|awk -F. '{print $NF}')
 
-      ssh $compute "nohup rmmod $pdriver; modprobe $pdriver"
-      ssh $compute "nohup rmmod $sdriver; modprobe $sdriver"
+      ssh $compute "nohup rmmod $pdriver; modprobe $pdriver; systemctl restart network.service"
       sleep 15
 
-      ssh $compute "ifconfig $pub $lan.$count netmask $nm"
-      ssh $compute "ifconfig $str 10.2.0.$end netmask $nm"
+      create_interface_config $pub $lan.$count $nm 1500 $compute
+      create_interface_config $str 10.2.0.$end $nm 9000 $compute
 
+      sleep 5
       pingcheck 10.2.0.$end
 
    count=$[count + 1]
@@ -391,27 +418,14 @@ function start_management_vms() {
    echo "Ok"
 }
 
-function config_yum_aluvm() {
-
-   # Currently here..
-
-   echo -n "Configuring Yum on System VM's: "
-   rocks list host alu-vm|perl -lane 'system "ssh $1 hostname $1" if /^(.*?):/' 
-   rocks run host alu-vm 'systemctl stop cloud-init'
-   rocks run host alu-vm command='rm -f /etc/yum.repos.d/*.repo'
-   rocks run host alu-vm command='sed -i "s/gpgcheck=1/gpgcheck=0/" /etc/yum.conf'
-   rocks run host alu-vm compute 'rm -f /etc/yum.repos.d/*'
-   rocks list host alu-vm compute | perl -lane 'system "scp -q /tmp/mega.repo $1:/etc/yum.repos.d/" if /^(.*?):/'
-   rocks run host alu-vm command='yum -y install patch puppet'
-   rm -f /etc/cluster/cluster.conf
-   echo "Ok"
-
-}
-
 function prepare_aluvms() {
 
    echo -n "Setting up ALU VM's: "
+
+   # Set VM's hostname
    rocks list host alu-vm|perl -lane 'system "ssh $1 hostname $1" if /^(.*?):/'
+   rocks list host alu-vm |perl -lane 'system qq|ssh $1 "echo HOSTNAME=$1 >> /etc/network"| if /^(.*?):/'
+
    rocks run host alu-vm 'systemctl stop cloud-init'
    rocks run host alu-vm command='rm -f /etc/yum.repos.d/*.repo'
    rocks run host alu-vm command='sed -i "s/gpgcheck=1/gpgcheck=0/" /etc/yum.conf'
@@ -434,7 +448,12 @@ function set_aluvm_ntp() {
    rocks run host alu-vm compute 'ntpdate 10.1.1.1' 
    rocks run host alu-vm compute 'systemctl enable ntpd' 
    rocks run host alu-vm compute 'systemctl start ntpd.service' 
-   rocks list host alu-vm|perl -lane 'system "rsync -aP /root/.ssh/id_rsa $1:/root/.ssh/" if /(.*?):/'
+   rocks list host alu-vm|perl -lane 'system "rsync -a /root/.ssh/ $1:/root/.ssh/" if /(.*?):/'
+   rocks run host alu-vm 'yum -y install perl' &> /dev/null
+   rocks run host alu-vm command="perl -pi -e 's/SELINUX=enforcing/SELINUX=disabled/' /etc/sysconfig/selinux"
+   rocks run host alu-vm 'reboot'
+
+   wait_for_boot alu-vm
    echo "Ok"
 }
 
@@ -469,8 +488,25 @@ function set_aluvm_ip() {
    ssh os-cinder "route delete default; route add default gw $gw"
 }
 
-sync_juno_and_friends
-exit;
+function start_packstack() {
+
+   echo "Starting Packstack: "
+   perl -pi -e 's/10.1.20.151/10.1.20.51/g' /tmp/packstack-os-controller-icehouse.ga.txt
+   perl -pi -e 's/10.1.20.150/10.1.20.51/g' /tmp/packstack-os-controller-icehouse.ga.txt
+   perl -pi -e 's/MYSQL/MARIADB/g' /tmp/packstack-os-controller-icehouse.ga.txt
+   perl -pi -e 's/CONFIG_MARIADB_INSTALL=n/CONFIG_MARIADB_INSTALL=y/g' /tmp/packstack-os-controller-icehouse.ga.txt
+
+   python /export/apps/openstack/cinder/rbd_cinder_cfg.py -d
+
+   rocks run host alu-vm compute 'systemctl stop ntpd.service'
+   scp /tmp/packstack-os-controller-icehouse.ga.txt os-controller:
+   ssh os-controller 'yum -y install openstack-packstack'
+   rocks run host alu-vm compute 'yum clean all'
+   ssh os-controller 'packstack --answer-file packstack-os-controller-icehouse.ga.txt'
+
+   echo "Ok"
+
+}
 
 stop_ha
 reset_ceph
@@ -480,7 +516,7 @@ clean_repo
 setup_el7
 pxe_boot_computes
 fix_grub_and_reboot
-wait_for_boot
+wait_for_boot computes
 sync_juno_and_friends
 create_juno_repo
 mount_apps_share
@@ -493,3 +529,4 @@ start_management_vms
 set_aluvm_ntp
 set_aluvm_defroute
 set_aluvm_ip
+start_packstack
