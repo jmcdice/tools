@@ -290,6 +290,8 @@ function add_public_storage_ips() {
          perl -lane 'system qq|grep "@F" /export/apps/common/perl/ALU/common/ACID.pm|'| \
          grep storage|perl -lane 'print $1 if /(eth\d)/')
 
+   nm=$(ifconfig br1|perl -lane 'print $1 if /Mask:(.*?)$/')
+
    count='50'
 
    for compute in `rocks list host compute | perl -lane 'print $1 if /(compute.*?):/'`
@@ -303,8 +305,8 @@ function add_public_storage_ips() {
       ssh $compute "nohup rmmod $sdriver; modprobe $sdriver"
       sleep 15
 
-      ssh $compute "ifconfig $pub $lan.$count netmask 255.255.255.0"
-      ssh $compute "ifconfig $str 10.2.0.$end netmask 255.255.255.0"
+      ssh $compute "ifconfig $pub $lan.$count netmask $nm"
+      ssh $compute "ifconfig $str 10.2.0.$end netmask $nm"
 
       pingcheck 10.2.0.$end
 
@@ -443,18 +445,20 @@ function set_aluvm_defroute() {
 }
 
 function set_aluvm_ip() {
-   lan=$(ifconfig br1|perl -lane 'print $1 if /addr:(.*?)\s.*?Mask.*?/' |cut -d'.' -f1-3)
 
-   ssh os-mysql1 "ifconfig eth3 10.2.0.51 netmask 255.255.255.0"
-   ssh os-glance "ifconfig eth1 $lan.15 netmask 255.255.255.0"
-   ssh os-glance "ifconfig eth3 10.2.0.48 netmask 255.255.255.0"
-   ssh os-controller "ifconfig eth1 $lan.11 netmask 255.255.255.0"
-   ssh os-controller "ifconfig eth3 10.2.0.47 netmask 255.255.255.0"
-   ssh os-network "ifconfig eth2 $lan.16 netmask 255.255.255.0"
-   ssh os-network "ifconfig eth3 10.2.0.43 netmask 255.255.255.0"
-   ssh os-cinder "ifconfig eth1 $lan.14 netmask 255.255.255.0"
-   ssh os-cinder "ifconfig eth3 10.2.0.44 netmask 255.255.255.0"
-   ssh os-mysql2 "ifconfig eth3 10.2.0.52 netmask 255.255.255.0"
+   lan=$(ifconfig br1|perl -lane 'print $1 if /addr:(.*?)\s.*?Mask.*?/' |cut -d'.' -f1-3)
+   nm=$(ifconfig br1|perl -lane 'print $1 if /Mask:(.*?)$/')
+
+   ssh os-mysql1 "ifconfig eth3 10.2.0.51 netmask $nm"
+   ssh os-glance "ifconfig eth1 $lan.15 netmask $nm"
+   ssh os-glance "ifconfig eth3 10.2.0.48 netmask $nm"
+   ssh os-controller "ifconfig eth1 $lan.11 netmask $nm"
+   ssh os-controller "ifconfig eth3 10.2.0.47 netmask $nm"
+   ssh os-network "ifconfig eth2 $lan.16 netmask $nm"
+   ssh os-network "ifconfig eth3 10.2.0.43 netmask $nm"
+   ssh os-cinder "ifconfig eth1 $lan.14 netmask $nm"
+   ssh os-cinder "ifconfig eth3 10.2.0.44 netmask $nm"
+   ssh os-mysql2 "ifconfig eth3 10.2.0.52 netmask $nm"
 
    gw=$lan.1
 
