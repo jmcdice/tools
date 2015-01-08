@@ -469,18 +469,18 @@ function set_aluvm_ip() {
    lan=$(ifconfig br1|perl -lane 'print $1 if /addr:(.*?)\s.*?Mask.*?/' |cut -d'.' -f1-3)
    nm=$(ifconfig br1|perl -lane 'print $1 if /Mask:(.*?)$/')
 
-   ssh os-mysql1 "ifconfig eth3 10.2.0.51 netmask $nm"
-   ssh os-glance "ifconfig eth1 $lan.15 netmask $nm"
-   ssh os-glance "ifconfig eth3 10.2.0.48 netmask $nm"
-   ssh os-controller "ifconfig eth1 $lan.11 netmask $nm"
-   ssh os-controller "ifconfig eth3 10.2.0.47 netmask $nm"
-   ssh os-network "ifconfig eth2 $lan.16 netmask $nm"
-   ssh os-network "ifconfig eth3 10.2.0.43 netmask $nm"
-   ssh os-cinder "ifconfig eth1 $lan.14 netmask $nm"
-   ssh os-cinder "ifconfig eth3 10.2.0.44 netmask $nm"
-   ssh os-mysql2 "ifconfig eth3 10.2.0.52 netmask $nm"
+   create_interface_config eth3 10.2.0.51 255.255.255.0 1500 os-mysql1
+   create_interface_config eth1 $lan.15 $nm 1500 os-glance
+   create_interface_config eth3 10.2.0.48 255.255.255.0 1500 os-glance
+   create_interface_config eth1 $lan.11 $nm 1500 os-controller
+   create_interface_config eth3 10.2.0.47 255.255.255.0 1500 os-controller
+   create_interface_config eth2 $lan.16 $nm 1500 os-network
+   create_interface_config eth3 10.2.0.43 255.255.255.0 1500 os-network
+   create_interface_config eth1 $lan.14 $nm 1500 os-cinder
+   create_interface_config eth3 10.2.0.44 255.255.255.0 1500 os-cinder
+   create_interface_config eth3 10.2.0.52 255.255.255.0 1500 os-cinder
 
-   gw=$lan.1
+   gw=$(netstat -rn|grep ^0.0.0.0|awk '{print $2}')
 
    ssh os-glance "route delete default; route add default gw $gw"
    ssh os-controller "route delete default; route add default gw $gw"
@@ -508,14 +508,14 @@ function start_packstack() {
 
 }
 
-stop_ha
-reset_ceph
-backup_repo
-get_rhel7
-clean_repo
-setup_el7
-pxe_boot_computes
-fix_grub_and_reboot
+#stop_ha
+#reset_ceph
+#backup_repo
+#get_rhel7
+#clean_repo
+#setup_el7
+#pxe_boot_computes
+#fix_grub_and_reboot
 wait_for_boot compute
 sync_juno_and_friends
 create_juno_repo
