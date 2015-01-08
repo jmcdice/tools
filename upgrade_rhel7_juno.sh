@@ -9,8 +9,10 @@ function stop_ha() {
    service pacemaker stop &> /dev/null
    service puppetmaster stop &> /dev/null
    service haproxy stop &> /dev/null
+   rm -f /etc/cluster/cluster.conf
 
    ssh vm-manager-0-0 'service pacemaker stop' &> /dev/null
+   ssh vm-manager-0-0 'rm -f /etc/cluster/cluster.conf'
    echo "Ok"
 }
 
@@ -404,6 +406,63 @@ function config_yum_aluvm() {
 
 }
 
+function prepare_aluvms() {
+
+   echo -n "Setting up ALU VM's: "
+   rocks list host alu-vm|perl -lane 'system "ssh $1 hostname $1" if /^(.*?):/'
+   rocks run host alu-vm 'systemctl stop cloud-init'
+   rocks run host alu-vm command='rm -f /etc/yum.repos.d/*.repo'
+   rocks run host alu-vm command='sed -i "s/gpgcheck=1/gpgcheck=0/" /etc/yum.conf'
+   rocks run host alu-vm compute 'rm -f /etc/yum.repos.d/*'
+   rocks list host alu-vm compute | perl -lane 'system "scp -q /tmp/mega.repo $1:/etc/yum.repos.d/" if /^(.*?):/'
+   rocks run host alu-vm command='yum -y install patch puppet' &> /dev/null
+   rocks run host compute alu-vm 'systemctl stop NetworkManager.service' &> /dev/null
+   rocks run host compute alu-vm 'systemctl disable NetworkManager.service' &> /dev/null
+   echo "Ok"
+}
+
+function set_aluvm_ntp() {
+
+   echo -n "Configuring NTPd on ALUVM's: "
+   rocks run host alu-vm compute 'echo nameserver 10.1.1.1 > /etc/resolv.conf' 
+   rocks run host alu-vm compute 'yum clean all' 
+   rocks run host alu-vm compute 'yum -y install ntp' 
+   rocks run host alu-vm compute 'echo server 10.1.1.1 > /etc/ntp.conf' 
+   rocks run host alu-vm compute 'timedatectl set-timezone UTC' 
+   rocks run host alu-vm compute 'ntpdate 10.1.1.1' 
+   rocks run host alu-vm compute 'systemctl enable ntpd' 
+   rocks run host alu-vm compute 'systemctl start ntpd.service' 
+   echo "Ok"
+}
+
+function set_aluvm_defroute() {
+
+   echo "Updating Defroute for ALUVMs: "
+   rocks run host alu-vm command='grep DEFROUTE /etc/sysconfig/network-scripts/ifcfg-eth0 || echo DEFROUTE=no >> /etc/sysconfig/network-scripts/ifcfg-eth0'
+   echo "Ok"
+}
+
+function set_aluvm_ip() {
+   lan=$(ifconfig br1|perl -lane 'print $1 if /addr:(.*?)\s.*?Mask.*?/' |cut -d'.' -f1-3)
+
+   ssh os-mysql1 "ifconfig eth3 10.2.0.51 netmask 255.255.255.0"
+   ssh os-glance "ifconfig eth1 $lan.15 netmask 255.255.255.0"
+   ssh os-glance "ifconfig eth3 10.2.0.48 netmask 255.255.255.0"
+   ssh os-controller "ifconfig eth1 $lan.11 netmask 255.255.255.0"
+   ssh os-controller "ifconfig eth3 10.2.0.47 netmask 255.255.255.0"
+   ssh os-network "ifconfig eth2 $lan.16 netmask 255.255.255.0"
+   ssh os-network "ifconfig eth3 10.2.0.43 netmask 255.255.255.0"
+   ssh os-cinder "ifconfig eth1 $lan.14 netmask 255.255.255.0"
+   ssh os-cinder "ifconfig eth3 10.2.0.44 netmask 255.255.255.0"
+   ssh os-mysql2 "ifconfig eth3 10.2.0.52 netmask 255.255.255.0"
+
+   gw=$lan.1
+
+   ssh os-glance "route delete default; route add default gw $gw"
+   ssh os-controller "route delete default; route add default gw $gw"
+   ssh os-network "route delete default; route add default gw $gw"
+   ssh os-cinder "route delete default; route add default gw $gw"
+}
 
 stop_ha
 reset_ceph
@@ -423,4 +482,6 @@ create_storage_cluster
 mount_ceph_fuse
 reset_rocks_repo
 start_management_vms
-
+set_aluvm_ntp
+set_aluvm_defroute
+set_aluvm_ip
