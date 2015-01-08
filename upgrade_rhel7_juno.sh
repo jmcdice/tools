@@ -434,6 +434,7 @@ function set_aluvm_ntp() {
    rocks run host alu-vm compute 'ntpdate 10.1.1.1' 
    rocks run host alu-vm compute 'systemctl enable ntpd' 
    rocks run host alu-vm compute 'systemctl start ntpd.service' 
+   rocks list host alu-vm|perl -lane 'system "rsync -aP /root/.ssh/id_rsa $1:/root/.ssh/" if /(.*?):/'
    echo "Ok"
 }
 
@@ -467,6 +468,9 @@ function set_aluvm_ip() {
    ssh os-network "route delete default; route add default gw $gw"
    ssh os-cinder "route delete default; route add default gw $gw"
 }
+
+sync_juno_and_friends
+exit;
 
 stop_ha
 reset_ceph
