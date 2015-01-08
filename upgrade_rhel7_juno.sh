@@ -116,7 +116,7 @@ function fix_grub_and_reboot() {
 
          RET=$?
          if [ $RET -eq 0 ]; then
-            sleep 20
+            sleep 120 # Enough time to fininsh post-install stuff in anaconda
             install_grub $compute
             break
          else 
