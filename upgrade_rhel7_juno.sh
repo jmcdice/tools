@@ -293,11 +293,13 @@ function add_public_storage_ips() {
    for compute in `rocks list host compute | perl -lane 'print $1 if /(compute.*?):/'`
    do
       # Reload interface drivers, otherwise ping doesn't always work.
-      driver=$(ssh $compute "ethtool -i $pub"|grep driver|awk '{print $2}')
+      pdriver=$(ssh $compute "ethtool -i $pub"|grep driver|awk '{print $2}')
+      sdriver=$(ssh $compute "ethtool -i $str"|grep driver|awk '{print $2}')
       end=$(host $compute|awk -F. '{print $NF}')
-      ssh $compute "nohup rmmod $driver; modprobe $driver"
-      sleep 5
 
+      ssh $compute "nohup rmmod $pdriver; modprobe $pdriver"
+      ssh $compute "nohup rmmod $sdriver; modprobe $sdriver"
+      sleep 15
 
       ssh $compute "ifconfig $pub $lan.$count netmask 255.255.255.0"
       ssh $compute "ifconfig $str 10.2.0.$end netmask 255.255.255.0"
