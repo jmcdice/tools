@@ -516,7 +516,7 @@ clean_repo
 setup_el7
 pxe_boot_computes
 fix_grub_and_reboot
-wait_for_boot computes
+wait_for_boot compute
 sync_juno_and_friends
 create_juno_repo
 mount_apps_share
