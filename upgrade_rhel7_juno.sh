@@ -1,7 +1,9 @@
 # Turn me into a RHEL 7 node with Juno.
-# Yossi keeps messing up so, time to automate this whole thing.
+# Yosi keeps messing up so, time to automate this whole thing.
 # Joey <jmcdice@gmail.com>
 
+echo "Upgrading node to RHEL7 and Juno."
+echo ""
 
 function stop_ha() {
 
@@ -517,24 +519,24 @@ function start_packstack() {
 
 }
 
-# stop_ha
-# reset_ceph
-# backup_repo
-# get_rhel7
-# clean_repo
-# setup_el7
-# pxe_boot_computes
-# fix_grub_and_reboot
-# wait_for_boot compute
-# sync_juno_and_friends
-# create_juno_repo
-# mount_apps_share
-# install_python_ceph_puppet
-# add_public_storage_ips
-# create_storage_cluster
-# mount_ceph_fuse
-# reset_rocks_repo
-# start_management_vms
+stop_ha
+reset_ceph
+backup_repo
+get_rhel7
+clean_repo
+setup_el7
+pxe_boot_computes
+fix_grub_and_reboot
+wait_for_boot compute
+sync_juno_and_friends
+create_juno_repo
+mount_apps_share
+install_python_ceph_puppet
+add_public_storage_ips
+create_storage_cluster
+mount_ceph_fuse
+reset_rocks_repo
+start_management_vms
 prepare_aluvms
 set_aluvm_ntp
 set_aluvm_defroute
