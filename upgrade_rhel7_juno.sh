@@ -415,6 +415,15 @@ function start_management_vms() {
    ssh vm-manager-0-0 'service libvirtd restart' &> /dev/null
 
    perl /export/apps/initialize_cluster/enable_kvm_vms.pl &> /dev/null
+
+   # push the ssh keys
+   pw=$(grep SERVICE_VM_TEMPLATE_PASSWORD /export/apps/cluster-config.txt|awk '{print $2}')
+
+   for host in `rocks list host alu-vm|perl -lane 'print $1 if /^(.*?):/'`
+   do
+      perl /export/apps/CloudBand/set_pw.pl --passwd $pw --ip $host
+   done
+
    echo "Ok"
 }
 
@@ -508,24 +517,25 @@ function start_packstack() {
 
 }
 
-stop_ha
-reset_ceph
-backup_repo
-get_rhel7
-clean_repo
-setup_el7
-pxe_boot_computes
-fix_grub_and_reboot
-wait_for_boot compute
-sync_juno_and_friends
-create_juno_repo
-mount_apps_share
-install_python_ceph_puppet
-add_public_storage_ips
-create_storage_cluster
-mount_ceph_fuse
-reset_rocks_repo
-start_management_vms
+# stop_ha
+# reset_ceph
+# backup_repo
+# get_rhel7
+# clean_repo
+# setup_el7
+# pxe_boot_computes
+# fix_grub_and_reboot
+# wait_for_boot compute
+# sync_juno_and_friends
+# create_juno_repo
+# mount_apps_share
+# install_python_ceph_puppet
+# add_public_storage_ips
+# create_storage_cluster
+# mount_ceph_fuse
+# reset_rocks_repo
+# start_management_vms
+prepare_aluvms
 set_aluvm_ntp
 set_aluvm_defroute
 set_aluvm_ip
