@@ -39,7 +39,6 @@ function make_initrd() {
    # Repack
    cd /export/build_iso/x86_64/initrd 
    find . | cpio --quiet -c -o | xz -0 --format=lzma > ../isolinux/initrd.img  
-   cp ../isolinux/initrd.img /tmp/joey/
    rm -rf /export/build_iso/x86_64/initrd/
    echo "Ok"
 }
