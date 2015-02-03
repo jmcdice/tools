@@ -32,13 +32,15 @@ function make_initrd() {
    xz -dc /mnt/cdrom/isolinux/initrd.img | cpio -id &> /dev/null
    umount /mnt/cdrom/
 
-   # Greg's site.attrs
-   cp /root/stackiq/site.attrs.stackiq /export/build_iso/x86_64/initrd/tmp/site.attrs
+   # Some working site.attrs
+   cp /root/stackiq/site.attrs.auto /export/build_iso/x86_64/initrd/tmp/site.attrs
    cp /root/stackiq/rolls.xml /export/build_iso/x86_64/initrd/tmp/rolls.xml
    
    # Repack
-   cd /export/build_iso/x86_64/initrd && find . | cpio --quiet -c -o | xz --verbose -0 --format=lzma > ../isolinux/initrd.img  &> /dev/null
-   rm -rf initrd/
+   cd /export/build_iso/x86_64/initrd 
+   find . | cpio --quiet -c -o | xz -0 --format=lzma > ../isolinux/initrd.img  
+   cp ../isolinux/initrd.img /tmp/joey/
+   rm -rf /export/build_iso/x86_64/initrd/
    echo "Ok"
 }
 
