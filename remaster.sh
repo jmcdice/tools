@@ -46,7 +46,6 @@ function make_initrd() {
 function make_iso() {
 
    echo -n "Creating ISO file: "
-   mkdir -p /var/www/html/iso/auto/$cluster/
    output="/export/iso/$cluster-fe-install.iso";
    cmd="mkisofs -V 'ALU' -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 6 -boot-info-table -r -T -f -input-charset utf-8 -m initrd -m alu-fe -o $output ." 
 
