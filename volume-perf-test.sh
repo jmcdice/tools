@@ -72,7 +72,7 @@ function start() {
    wait_for_ssh 
    attach_volumes
    partition_disks
-   volume_tests
+   #volume_tests
 }
 
 function wait_for_ssh() {
@@ -106,32 +106,41 @@ function create_volumes() {
    echo -n "Creating volumes: "
    backends=$(get_backends)
 
-   # Create a slow and a fast volume for each backend.
-   for i in $backends; do 
-      cinder create --volume-type low-iops-$i  --display-name low-$i  15 
-      cinder create --volume-type high-iops-$i --display-name high-$i 15 
+   count=$(( ( RANDOM % 10 )  + 1 ))
+
+   for x in $(seq $count); do
+      for i in $backends; do
+         cinder create --volume-type low-iops-$i  --display-name low-$i-$x  15
+         cinder create --volume-type high-iops-$i --display-name high-$i-$x 15
+      done
    done
+
+   # Create a slow and a fast volume for each backend.
+   #for i in $backends; do 
+   #   cinder create --volume-type low-iops-$i  --display-name low-$i  15 
+   #   cinder create --volume-type high-iops-$i --display-name high-$i 15 
+   #done
 
    echo "Ok"
 }
 
 function attach_volumes() {
 
-   # Attach the volumes we created to our instances. 
-   disk='b'
    slowvm=$(nova list |grep slowvm|awk '{print $2}')
    fastvm=$(nova list |grep fastvm|awk '{print $2}')
    backends=$(get_backends)
 
    echo -n "Attaching volumes to instances: "
 
-   for i in $backends; do 
-      low=$(cinder list|grep low-$i|awk '{print $2}')
-      high=$(cinder list|grep high-$i|awk '{print $2}')
-
-      nova volume-attach $slowvm $low /dev/vd$disk &> /dev/null
-      nova volume-attach $fastvm $high /dev/vd$disk &> /dev/null
-      disk=$(echo $disk | tr "0-9a-z" "1-9a-z_")
+   for i in $backends; do
+      for id in `cinder list|grep low-$i|awk '{print $2}'`
+         do 
+         nova volume-attach $slowvm $id &> /dev/null
+      done
+      for id in `cinder list|grep high-$i|awk '{print $2}'`
+         do 
+         nova volume-attach $fastvm $id &> /dev/null
+      done
    done
 
    # Allow the volumes to attach in the Guest OS
@@ -205,30 +214,35 @@ function partition_disks() {
    slowvm=$(nova list |grep slowvm|perl -lane 'print $1 if /public-net=(.*?)\s/')
    fastvm=$(nova list |grep fastvm|perl -lane 'print $1 if /public-net=(.*?)\s/')
    login='ssh -q -t -oStrictHostKeyChecking=no -l centos -i /root/.ssh/smoketest_id_rsa'
-
    backends=$(get_backends)
-   disk='b'
-   one='1'
+   echo -n "Partitioning and formatting volumes: "
 
    for i in $backends; do
-      echo -n "Partitioning volumes for $i: "
+      for disk in `$login $slowvm "sudo fdisk -l|grep ^Disk|grep sect | awk '{print \\$2}' | sed 's/:\$//' | tr -d '\015' | grep -v vda"`
+      do
+         disk="${disk%?}"  # Funny char at the end of $disk
+         drive=$(echo $disk | sed 's/\/dev\///')
+         fmt="echo -e 'o\nn\np\n1\n\n\nw'"
+         fdisk="sudo /usr/sbin/fdisk $disk"
 
-      $login $slowvm "echo -e 'o\nn\np\n1\n\n\nw' | sudo /usr/sbin/fdisk /dev/vd$disk"  &> /dev/null
-      $login $fastvm "echo -e 'o\nn\np\n1\n\n\nw' | sudo /usr/sbin/fdisk /dev/vd$disk"  &> /dev/null
+         $login $slowvm "$fmt | $fdisk" &> /dev/null
+         $login $slowvm "sudo /usr/sbin/mkfs.xfs $disk" &> /dev/null
+         $login $slowvm "sudo mkdir /slow-$i-$drive/ && sudo mount $disk /slow-$i-$drive/"
+      done
+
+      for disk in `$login $fastvm "sudo fdisk -l|grep ^Disk|grep sect | awk '{print \\$2}' | sed 's/:\$//' | tr -d '\015' | grep -v vda"`
+      do
+         disk="${disk%?}"  # Funny char at the end of $disk
+         drive=$(echo $disk | sed 's/\/dev\///')
+         fmt="echo -e 'o\nn\np\n1\n\n\nw'"
+         fdisk="sudo /usr/sbin/fdisk $disk"
+
+         $login $fastvm "$fmt | $fdisk" &> /dev/null
+         $login $fastvm "sudo /usr/sbin/mkfs.xfs $disk" &> /dev/null
+         $login $fastvm "sudo mkdir /fast-$i-$drive/ && sudo mount $disk /fast-$i-$drive/"
+      done
+
       echo "Ok"
-
-      echo -n "Formatting volumes for $i: "
-      $login $slowvm "sudo /usr/sbin/mkfs.ext4 /dev/vd$disk$one"  &> /dev/null
-      $login $fastvm "sudo /usr/sbin/mkfs.ext4 /dev/vd$disk$one"  &> /dev/null
-      echo "Ok"
-
-      echo -n "Mounting volumes for $i: "
-      $login $slowvm "sudo mkdir /slow-$i/ && sudo mount /dev/vd$disk$one /slow-$i/"  &> /dev/null
-      $login $fastvm "sudo mkdir /fast-$i/ && sudo mount /dev/vd$disk$one /fast-$i/"  &> /dev/null
-      echo "Ok"
-
-      # Increment the drive letter
-      disk=$(echo $disk | tr "0-9a-z" "1-9a-z_")
    done
 }
 
