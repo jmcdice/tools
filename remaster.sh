@@ -48,9 +48,11 @@ function make_squashfs() {
    cp /root/stackiq/site.attrs.auto rootfs/tmp/site.attrs
    cp /root/stackiq/rolls.xml rootfs/tmp/rolls.xml
 
-   # Rebundle file system into squashfs.img
-   mksquashfs /export/build_iso/x86_64/rootfs /export/build_iso/x86_64/LiveOS/squashfs.img -keep-as-directory
    umount /export/build_iso/x86_64/rootfs/
+
+   # Rebundle file system into squashfs.img
+   mksquashfs /export/build_iso/x86_64/squashfs/LiveOS /export/build_iso/x86_64/LiveOS/squashfs.img -keep-as-directory 
+
    rm -rf rootfs squashfs
    umount /mnt/cdrom/
 }
@@ -68,6 +70,7 @@ function make_iso() {
 
    cd /export/build_iso/x86_64/
    $cmd 
+   sleep 3
    du -sh $output 
 }
 
