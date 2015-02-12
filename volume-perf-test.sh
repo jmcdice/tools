@@ -72,7 +72,7 @@ function start() {
    wait_for_ssh 
    attach_volumes
    partition_disks
-   #volume_tests
+   volume_tests
 }
 
 function wait_for_ssh() {
@@ -106,20 +106,15 @@ function create_volumes() {
    echo -n "Creating volumes: "
    backends=$(get_backends)
 
+   # Create a random number of volumes per test run.
    count=$(( ( RANDOM % 10 )  + 1 ))
 
    for x in $(seq $count); do
       for i in $backends; do
-         cinder create --volume-type low-iops-$i  --display-name low-$i-$x  15
-         cinder create --volume-type high-iops-$i --display-name high-$i-$x 15
+         cinder create --volume-type low-iops-$i  --display-name low-$i-$x  15 &> /dev/null
+         cinder create --volume-type high-iops-$i --display-name high-$i-$x 15 &> /dev/null
       done
    done
-
-   # Create a slow and a fast volume for each backend.
-   #for i in $backends; do 
-   #   cinder create --volume-type low-iops-$i  --display-name low-$i  15 
-   #   cinder create --volume-type high-iops-$i --display-name high-$i 15 
-   #done
 
    echo "Ok"
 }
@@ -224,10 +219,11 @@ function partition_disks() {
          drive=$(echo $disk | sed 's/\/dev\///')
          fmt="echo -e 'o\nn\np\n1\n\n\nw'"
          fdisk="sudo /usr/sbin/fdisk $disk"
-
-         $login $slowvm "$fmt | $fdisk" &> /dev/null
+         $login $slowvm "$fmt | $fdisk"  &> /dev/null
+         one="1"
+         disk=$disk$one
          $login $slowvm "sudo /usr/sbin/mkfs.xfs $disk" &> /dev/null
-         $login $slowvm "sudo mkdir /slow-$i-$drive/ && sudo mount $disk /slow-$i-$drive/"
+         $login $slowvm "sudo mkdir /slow-$i-$drive/ ; sleep 5; sudo mount $disk /slow-$i-$drive/"
       done
 
       for disk in `$login $fastvm "sudo fdisk -l|grep ^Disk|grep sect | awk '{print \\$2}' | sed 's/:\$//' | tr -d '\015' | grep -v vda"`
@@ -236,10 +232,11 @@ function partition_disks() {
          drive=$(echo $disk | sed 's/\/dev\///')
          fmt="echo -e 'o\nn\np\n1\n\n\nw'"
          fdisk="sudo /usr/sbin/fdisk $disk"
-
          $login $fastvm "$fmt | $fdisk" &> /dev/null
-         $login $fastvm "sudo /usr/sbin/mkfs.xfs $disk" &> /dev/null
-         $login $fastvm "sudo mkdir /fast-$i-$drive/ && sudo mount $disk /fast-$i-$drive/"
+         one="1"
+         disk=$disk$one
+         $login $fastvm "sudo /usr/sbin/mkfs.xfs $disk"  &> /dev/null
+         $login $fastvm "sudo mkdir /fast-$i-$drive/ ; sleep 5; sudo mount $disk /fast-$i-$drive/"
       done
 
       echo "Ok"
@@ -256,13 +253,23 @@ function volume_tests() {
    backends=$(get_backends)
 
    for i in $backends; do 
-      echo -n "Testing slow $i ($slowvm): "
-      $login $slowvm "sudo dd if=/dev/zero of=/slow-$i/dd.img bs=1M count=512 oflag=direct" | \
-         grep MB | awk '{ print $8, $9 }'
 
-      echo -n "Testing fast $i ($fastvm): "
-      $login $fastvm "sudo dd if=/dev/zero of=/fast-$i/dd.img bs=1M count=512 oflag=direct" | \
+      for dir in `$login $fastvm "df -h|grep fast|awk '{print \\$NF}'"`
+      do
+         dir="${dir%?}"
+         echo -n "Testing fast $i ($dir): "
+         $login $fastvm "sudo dd if=/dev/zero of=$dir/dd.img bs=1M count=512 oflag=direct" | \
          grep MB | awk '{ print $8, $9 }'
+      done
+
+      for dir in `$login $slowvm "df -h|grep slow|awk '{print \\$NF}'"`
+      do
+         dir="${dir%?}"
+         echo -n "Testing slow $i ($dir): "
+         $login $slowvm "sudo dd if=/dev/zero of=$dir/dd.img bs=1M count=512 oflag=direct" | \
+         grep MB | awk '{ print $8, $9 }'
+      done
+
    done
 
 }
