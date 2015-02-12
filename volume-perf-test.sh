@@ -2,6 +2,8 @@
 # Create some volumes, networks and compute instances. 
 # Boot it all up and start testing it.
 # 
+# example: sh volume-perf-test.sh start backend=solidfire
+#
 # Joey <jmcdice@gmail.com>
 
 args=$*
