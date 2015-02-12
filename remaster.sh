@@ -81,8 +81,8 @@ function check_release() {
 }
 
 check_release
-#echo "Customizing Rocks ISO for: $cluster"
-#prep_workspace
-#make_squashfs
+echo "Customizing Rocks ISO for: $cluster"
+prep_workspace
+make_squashfs
 make_iso
 echo "Finished"
