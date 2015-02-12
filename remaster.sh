@@ -28,34 +28,22 @@ function prep_workspace() {
    echo "Ok"
 }
 
-function make_squashfs() {
+function make_lightsout() {
 
-   # Extract the file system in squashfs.img to disk
-   echo -n "Preparing squashfs filesystem: "
-   cd /export/build_iso/x86_64/
-   rpm -q squashfs-tools &> /dev/null || yum -y install squashfs-tools
-   cd /export/build_iso/x86_64/
-   mount LiveOS/squashfs.img /mnt/cdrom/ -o loop -t squashfs
-   mkdir squashfs
-   rsync -a /mnt/cdrom/ squashfs/
-   umount /mnt/cdrom/
-   rm LiveOS/squashfs.img
+   cd /export/build_iso/x86_64/ 
+   echo "%pre" >> ks.cfg 
 
-   mkdir rootfs
-   mount squashfs/LiveOS/rootfs.img rootfs/ -o loop
+   echo "cat > /tmp/site.attrs << 'EOF'" >> ks.cfg
 
-   # Some working site.attrs
-   cp /root/stackiq/site.attrs.auto rootfs/tmp/site.attrs
-   cp /root/stackiq/rolls.xml rootfs/tmp/rolls.xml
+   cat /root/stackiq/site.attrs.auto >> ks.cfg
+   echo "EOF" >> ks.cfg 
 
-   umount /export/build_iso/x86_64/rootfs/
+   echo "cat > /tmp/rolls.xml << 'EOF'" >> ks.cfg
+   cat /root/stackiq/rolls.xml >> ks.cfg
+   echo "EOF" >> ks.cfg 
+   echo "%end" >> ks.cfg
+} 
 
-   # Rebundle file system into squashfs.img
-   mksquashfs /export/build_iso/x86_64/squashfs/LiveOS /export/build_iso/x86_64/LiveOS/squashfs.img -keep-as-directory 
-
-   rm -rf rootfs squashfs
-   umount /mnt/cdrom/
-}
 
 function make_iso() {
 
@@ -86,6 +74,6 @@ function check_release() {
 check_release
 echo "Customizing Rocks ISO for: $cluster"
 prep_workspace
-make_squashfs
+make_lightsout
 make_iso
 echo "Finished"
