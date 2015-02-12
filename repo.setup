@@ -1,0 +1,6 @@
+
+# A helper script for adding stuff to my tools repo.
+git config --global user.name "jmcdice"
+git config --global user.email jmcdice@gmail.com
+git config remote.origin.url https://jmcdice@github.com/jmcdice/tools.git
+unset SSH_ASKPASS
