@@ -13,9 +13,13 @@ fi
 function prep_workspace() {
 
    echo -n "Preparing work space: "
+
+   test -d /mnt/cdrom || mkdir -p /mnt/cdrom/
+   test -d /mnt/liveos || mkdir -p /mnt/liveos/
+
    rm -rf /export/build_iso/x86_64/
    mkdir -p /export/build_iso/x86_64/
-   mount -o loop /export/iso/ALU-7.0.1.x86_64.disk1.iso /mnt/cdrom/
+   mount -o loop /export/iso/ALU-7.0.1.x86_64.disk1.iso /mnt/cdrom/ &> /dev/null
    echo "Ok"
 
    echo -n "Copying in original ISO: "
@@ -23,39 +27,62 @@ function prep_workspace() {
    echo "Ok"
 }
 
-function make_initrd() {
+function make_squashfs() {
 
-   echo -n "Preparing initrd: "
+   echo -n "Preparing squashfs filesystem: "
    cd /export/build_iso/x86_64/
-   mkdir initrd
-   cd initrd
-   xz -dc /mnt/cdrom/isolinux/initrd.img | cpio -id &> /dev/null
+   rpm -q squashfs-tools &> /dev/null || yum -y install squashfs-tools
+
+   cd /export/build_iso/x86_64/
+
+   mount LiveOS/squashfs.img /mnt/cdrom/ -o loop -t squashfs
+   mkdir squashfs
+   rsync -a /mnt/cdrom/ squashfs/
    umount /mnt/cdrom/
 
+   mkdir rootfs
+   mount squashfs/LiveOS/rootfs.img rootfs/ -o loop
+
    # Some working site.attrs
-   cp /root/stackiq/site.attrs.auto /export/build_iso/x86_64/initrd/tmp/site.attrs
-   cp /root/stackiq/rolls.xml /export/build_iso/x86_64/initrd/tmp/rolls.xml
-   
-   # Repack
-   cd /export/build_iso/x86_64/initrd 
-   find . | cpio --quiet -c -o | xz -0 --format=lzma > ../isolinux/initrd.img  
-   rm -rf /export/build_iso/x86_64/initrd/
-   echo "Ok"
+   cp /root/stackiq/site.attrs.auto rootfs/tmp/site.attrs
+   cp /root/stackiq/rolls.xml rootfs/tmp/rolls.xml
+
+   rm LiveOS/squashfs.img
+   mksquashfs /export/build_iso/x86_64/rootfs /export/build_iso/x86_64/LiveOS/squashfs.img
+
+   umount /export/build_iso/x86_64/rootfs/
+   rm -rf rootfs squashfs
+   umount /mnt/cdrom/
 }
 
 function make_iso() {
 
    echo -n "Creating ISO file: "
+
    output="/export/iso/$cluster-fe-install.iso";
-   cmd="mkisofs -V 'ALU' -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 6 -boot-info-table -r -T -f -input-charset utf-8 -m initrd -m alu-fe -o $output ." 
+   cmd="mkisofs -o $output \
+      -J -r -hide-rr-moved -hide-joliet-trans-tbl -V ALU \
+      -b isolinux/isolinux.bin -c isolinux/boot.cat \
+      -no-emul-boot -boot-load-size 4 -boot-info-table \
+      /export/build_iso/x86_64/"
 
    cd /export/build_iso/x86_64/
-   $cmd &> /dev/null 
+   $cmd 
    du -sh $output 
 }
 
-echo "Customizing Rocks ISO for: $cluster"
-prep_workspace
-make_initrd
+function check_release() {
+
+   grep -q 'release 7' /etc/redhat-release 
+   if [ $? -ne 0 ]; then
+      echo "ERROR: You need EL7 to run this."
+      exit 255
+   fi
+}
+
+check_release
+#echo "Customizing Rocks ISO for: $cluster"
+#prep_workspace
+#make_squashfs
 make_iso
 echo "Finished"
