@@ -28,8 +28,10 @@ function get_centos() {
    # Jump out of we already have it.
    nova image-list | grep -q centos-7 && echo "Ok" && return
 
+   echo "Installing."
+
    glance image-create --name centos-7 --is-public=true --container-format=bare --disk-format=qcow2 \
-         --copy-from http://cloud.centos.org/centos/7/devel/CentOS-7-x86_64-GenericCloud.qcow2
+         --copy-from http://cloud.centos.org/centos/7/devel/CentOS-7-x86_64-GenericCloud.qcow2 
 
       # Loop untili it's ready.
       while true; do
