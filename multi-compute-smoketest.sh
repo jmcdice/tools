@@ -1,3 +1,10 @@
+#
+# This script will launch a VM on each compute node in a cluster.
+# It will then ping each interface within each VM to determine if
+# the deployment is happy.
+#
+# Joey <joseph.mcdonald@alcatel-lucent.com
+
 function secgroup() {
    neutron security-group-create ssh &> /dev/null
    neutron security-group-rule-create --direction ingress --ethertype IPv4 --protocol tcp --port-range-min 22 --port-range-max 22 ssh &> /dev/null
@@ -20,7 +27,8 @@ function boot_vm() {
 }
 
 function start_vms() {
-   for compute in `nova-manage service list|grep ^nova-compute|sort --version-sort -f|awk '{print $2}'`
+
+   for compute in `ssh os-controller "nova-manage service list|grep ^nova-compute|sort --version-sort -f|awk '{print \\$2}'"`
    do
       boot_vm $compute
    done
@@ -54,8 +62,10 @@ function stop_vms() {
    done
 }
 
+stop_vms
 start_vms
 sleep 30
 check_vms
 stop_vms
+
 
