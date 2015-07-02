@@ -1,9 +1,23 @@
+#/bin/sh
+# Run automated, builds.
+# Joey <joseph.mcdonald@alcatel-lucent.com>
+#
+# Run two builds a day from cron, CBnode-3.0 and dev
+# 00 12 * * * /bin/sh /root/update.sh CBnode-3.0
+# 00 00 * * * /bin/sh /root/update.sh dev
+
+version=$1
+
+if [ -z "$version" ]; then
+   echo "Need a version to build."
+   exit
+fi
+
 cluster='nightly-build.bldr.cloud-band.com'
 fe='192.168.242.10'
 gw='192.168.242.1'
 fe_ilo='192.168.240.6'
 acid='192.168.240.201'
-
 
 function clean_up() {
    rm -rf /var/www/html/iso/$cluster/
@@ -37,21 +51,15 @@ function start_build() {
    # Start the build
    cd /export/ci/tools/
    rm -f /var/www/html/iso/run/ci-build.txt
-   #python CI.py -u http://192.168.240.201/iso/auto/node-2.bldr.cloud-band.com/node-2.bldr.cloud-band.com-fe-install.iso \
-      #-f /var/www/html/iso/auto/node-2.bldr.cloud-band.com/ilos.txt -i 192.168.242.10 -n node-2.bldr.cloud-band.com -v
    /bin/sh /export/ci/tools/run_build_hands_off.sh nightly-build.bldr.cloud-band.com verbose &
-   sleep 3
-   tail -f /var/www/html/iso/build.log | ccze
-
-
 }
 
 function add_ipmi() {
 
-   echo "192.168.240.9" >  /tmp/$cluster-ilos.txt
+   echo "192.168.240.6" >  /tmp/$cluster-ilos.txt
    echo "192.168.240.7" >> /tmp/$cluster-ilos.txt
    echo "192.168.240.8" >> /tmp/$cluster-ilos.txt
-   echo "192.168.240.6" >> /tmp/$cluster-ilos.txt
+   echo "192.168.240.9" >> /tmp/$cluster-ilos.txt
 }
 
 function poweroff() {
@@ -89,7 +97,7 @@ function kill_bill(){
 }
 
 kill_bill
-checkout 'CBnode-3.0'
+checkout $version
 poweroff
 clean_up
 add_ipmi
