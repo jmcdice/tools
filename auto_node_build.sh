@@ -32,7 +32,7 @@ function create_iso() {
       --public_ip '192.168.242.10' --public_netmask '255.255.255.0' --public_vip '192.168.242.5' \
       --public_vip_radosgw '192.168.242.9' --public_vmm_ip '192.168.242.20' --public_vmm2_ip '192.168.242.21' \
       --public_gw '192.168.242.1' --public_6gw 'fd75:4e2a:8f01:aff5::1' --public_ip6subnet 'fd75:4e2a:8f01:aff5::/64' \
-      --public_ntp '192.168.240.201' --public_dns '8.8.8.8' --timezone 'UTC' --rootpw ''Mc10vin\!\!'' --count '1' \
+      --public_ntp '192.168.240.201' --public_dns '8.8.8.8' --timezone 'UTC' --rootpw ''password1'' --count '1' \
       --ip4mode '1' --ip6mode '1' --cloudplatform 'openstack-ovs' --ilo_username 'hp' --ilo_password 'password' \
       --ilo_rocks_ip '192.168.240.6' --pub_nagios 'true' --c7knics '' --mojo '0' --nagiosemail 'nobody@cloud-band.com' \
       --nagiosemailsmtp 'smtp.cloud-band.com' --num_of_vmm '2' --public_compute0 '192.168.242.25' --public_net_mtu '1500' \
