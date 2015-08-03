@@ -162,12 +162,12 @@ function check_vms() {
          osn=$(neutron dhcp-agent-list-hosting-net $NET|grep os-network|head -1|awk '{print $4}')
          echo "Network $NET, namespace $ns on $osn"
          # DEV-27169 not checking for connectivity
-         #ssh $osn "ip netns exec qdhcp-$ns ping -c 3 $IP &> /dev/null"
-         #if [ $? -ne 0 ]; then
-         #   echo "Failed ($NET): $IP"
-         #else
-         #   echo "Success ($NET): $IP"
-         #fi
+         ssh $osn "ip netns exec qdhcp-$ns ping -c 3 $IP &> /dev/null"
+         if [ $? -ne 0 ]; then
+            echo "Failed ($NET): $IP"
+         else
+            echo "Success ($NET): $IP"
+         fi
       done
    done
 }
