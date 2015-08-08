@@ -36,12 +36,8 @@ def signal_handler(signal, frame):
         logging.info('Siginit caught, shutting down.')
         sys.exit(0)
 
- 
 HOST = '' # Internet facing interface.
 PORT = 22 # Anyone coming in on port 22, lifetime ban.
- 
-signal.signal(signal.SIGINT, signal_handler)          # Log ctrl+c's 
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 # Start logging
 logging.basicConfig(filename='/root/null_router.log', 
@@ -49,11 +45,15 @@ logging.basicConfig(filename='/root/null_router.log',
 		    format='%(asctime)s %(message)s',
 		    datefmt='%m/%d/%Y %I:%M:%S %p')
 
-
 logging.info('Starting up.') 
 logging.info('Socket created') 
+
+# Log ctrl+c's 
+signal.signal(signal.SIGINT, signal_handler)          
+
+# Bind socket to local host and port
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
  
-#Bind socket to local host and port
 try:
     s.bind((HOST, PORT))
 except socket.error as msg:
@@ -65,7 +65,7 @@ logging.info('Socket bind complete.')
 s.listen(10)
 logging.info('Socket now listening.')
 
-# Someone/thing connected..
+# Wait for a connection
 while 1:
     conn, addr = s.accept()
     start_new_thread(clientthread ,(conn,addr))
