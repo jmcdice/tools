@@ -12,35 +12,41 @@ import logging
 import subprocess
 from thread import *
 
+def default_route():
+    cmd = "ip route show 0.0.0.0/0|awk '{print $3}'"
+    route = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    gw = route.communicate()[0]
+    return gw.rstrip('\n')
+
 # Create a thread for each connection, so we can have more than one a time.
 def clientthread(conn, addr):
 
-    # Never block these IP's, they're my friends.
-    friends = re.compile("^127.0.0.1$|"
-			 "^194.90.7.244$")
+    gw = str(default_route) 
 
-    if friends.match(addr[0]):
+    # White list these IP's
+    whitelist = re.compile("^127.0.0.1$|"     # Localhost
+			   "^" + gw + "$|"    # Default GW
+			   "^194.90.7.244$")  # Your friends
+
+    if whitelist.match(addr[0]):
         logging.info("Connection from: " + addr[0] +". He's ok.")
         conn.close()
     else:
         logging.info('Attempted connection from: ' + addr[0] + ':' + str(addr[1]))
-	null_route="/sbin/route add " + addr[0] + " gw 127.0.0.1 lo"
         conn.close()
-
+	null_route="/sbin/route add " + addr[0] + " gw 127.0.0.1 lo"
         logging.info("Executing: " + null_route)
 	p = subprocess.Popen(null_route, shell=True)
-
-        conn.close()
 
 def signal_handler(signal, frame):
         logging.info('Siginit caught, shutting down.')
         sys.exit(0)
 
-HOST = '' # Internet facing interface.
+HOST = '' # Internet facing IP address.
 PORT = 22 # Anyone coming in on port 22, lifetime ban.
 
 # Start logging
-logging.basicConfig(filename='/root/null_router.log', 
+logging.basicConfig(filename='/var/log/null_router.log', 
 		    level=logging.DEBUG,
 		    format='%(asctime)s %(message)s',
 		    datefmt='%m/%d/%Y %I:%M:%S %p')
