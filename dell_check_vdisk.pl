@@ -42,11 +42,11 @@ sub delete_vdisks() {
    
       # This section commits the changes and power-cycles the system(s).
       print "Resetting controller config.\n";
-      my @reset = `$drac -r $ip -u hp -p password raid resetconfig:RAID.Integrated.1-1`;
+      my @reset = `$drac -r $ip -u $user -p $pass raid resetconfig:RAID.Integrated.1-1`;
       print "Creating a jobqueue.\n";
-      my @jobqueue = `$drac -r $ip -u hp -p password jobqueue create RAID.Integrated.1-1`;
+      my @jobqueue = `$drac -r $ip -u $user -p $pass jobqueue create RAID.Integrated.1-1`;
       print "Rebooting: $ip\n\n";
-      my @reset = `$drac -r $ip -u hp -p password serveraction powercycle`;
+      my @reset = `$drac -r $ip -u $user -p $pass serveraction powercycle`;
    }
    
    sleep 200 if ($need_sleep);
