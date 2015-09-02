@@ -3,8 +3,9 @@
 # Generate the nagios dashboard configuration.
 # Joey <joseph.mcdonald@alcatel-lucent.com>
 
+open FH, "> /var/www/config.php" or die "Can't write to /var/www/config.php: $!\n";
 
-print '<?php
+print FH '<?php
 $api_type = "nagios-api";
 $nagios_hosts = array(' . "\n";
 
@@ -19,12 +20,11 @@ for (`mojo --list|grep Cluster`) {
    my $html_color = uc `openssl rand -hex 3`;
    chomp $html_color;
 
-   open FH, "> config.php";
-   print qq|    array("hostname" => "$cluster", "port" => "6315", "protocol" => |
+   print FH qq|    array("hostname" => "$cluster", "port" => "6315", "protocol" => |
        . qq|"http", "tag" => "$ctag", "tagcolour" => "#$html_color"),\n|
 }
 
-print '
+print FH '
 );
 
 $filter = "";
