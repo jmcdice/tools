@@ -38,6 +38,12 @@ function setup_pinning() {
    nova flavor-create m1_1.small.cpu.pin 11 10240 30 4
    nova flavor-key m1_1.small.cpu.pin set cpu:cpuset=2,3,4,5
    nova flavor-key m1_1.small.cpu.pin set "aggregate_instance_extra_specs:pinned"="true"
+
+   # To delete
+   # nova flavor-delete m1_1.small.cpu.pin
+   # nova aggregate-remove-host aggregate0 compute-0-0.local
+   # nova aggregate-delete aggregate0
+
 }
 
 function boot_vm() {
