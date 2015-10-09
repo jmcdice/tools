@@ -32,6 +32,8 @@ function setup_pinning() {
    # yum -y install numactl && numactl -s
    nova aggregate-create aggregate0 zone0
    nova aggregate-add-host aggregate0 compute-0-0.local
+   nova aggregate-set-metadata aggregate0 pinned=true
+
 
    # Adjust the flavor creation for your VNF.
    # nova flavor-create m1_1.small.cpu.pin <id> <memory> <disk size> <cpu count>
