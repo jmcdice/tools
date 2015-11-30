@@ -1,7 +1,9 @@
-# Beginnings of a ticker program.
-# Joey
+# Give me a list of symbols in the S&P500 that are down more than 10% in one day.
+# 
+# Joey <jmcdice@gmail.com>
+# pip install yahoo-finance
+# pip install finsymbols
 
-from pprint import pprint
 from finsymbols import get_sp500_symbols
 from yahoo_finance import Share
 
@@ -9,7 +11,7 @@ sp500 = get_sp500_symbols()
 
 for d in sp500:
     symbol = d['symbol']
-    print "Checking: %s" % symbol
+    #print "Checking: %s" % symbol
     stockblob = Share(symbol)
     close = stockblob.get_prev_close()
     close = float(close)
