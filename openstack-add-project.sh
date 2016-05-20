@@ -1,5 +1,8 @@
 #!/bin/sh
 
+# Taken from this guy:
+# https://github.com/jamesbeedy/openstack
+
 if [ $# -eq 0 ]
 then
     echo " Usage: `basename $0` Project#"
