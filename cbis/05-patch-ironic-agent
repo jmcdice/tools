@@ -1,0 +1,18 @@
+#!/bin/bash
+#
+#
+
+cat << EOF > /patch-ironic-agent
+
+--- /lib/python2.7/site-packages/ironic_python_agent/hardware.py	2016-07-18 22:02:53.668820422 -0400
++++ /lib/python2.7/site-packages/ironic_python_agent/hardware.py	2016-07-18 14:40:33.578307259 -0400
+@@ -61,6 +61,7 @@
+ 
+     """
+     try:
++        utils.execute('iscsistart', '-b')
+         utils.execute('udevadm', 'settle')
+     except processutils.ProcessExecutionError as e:
+         LOG.warning('Something went wrong when waiting for udev '
+EOF
+patch -p1 < /patch-ironic-agent
