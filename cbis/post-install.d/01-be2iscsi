@@ -1,0 +1,17 @@
+#!/usr/bin/bash
+#
+# Install the be2iscsi driver kmod and corresponding kernel RPM's
+
+yum -y install iscsi-initiator-utils
+
+cat << EOF > /etc/yum.repos.d/cbis.repo
+[cbis]
+name=CBIS Deps
+baseurl=http://135.248.18.134:/iso/repo/
+enabled=1
+gpgcheck=0
+EOF
+
+yum clean all
+yum -y --disablerepo "*" --enablerepo cbis install kmod-be2iscsi kernel-3.10.0-327.el7
+

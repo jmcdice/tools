@@ -1,0 +1,29 @@
+#!/usr/bin/bash
+#
+# Start iscsi services
+
+
+cat << EOF >> /etc/rc.local
+/usr/sbin/iscsiadm -m fw
+if [ \$? == 0 ]; then
+   bash /etc/iscsi_check.sh
+fi
+EOF
+
+cat <<EOF> /etc/iscsi_check.sh
+#!/usr/bin/bash
+#
+# Start iscsi services
+
+function prepare_iscsi_disks () {
+  mkdir -p /var/lib
+  /usr/sbin/iscsid &
+  /usr/bin/udevadm settle
+  /usr/sbin/iscsiadm -m fw -l
+  /usr/bin/udevadm settle
+}
+
+prepare_iscsi_disks
+EOF
+
+chmod 755 /etc/iscsi_check.sh

@@ -1,0 +1,19 @@
+#!/usr/bin/bash
+#
+# Create a password for root
+
+function rootpw() {
+   echo -n 'Setting root password: '
+   echo 'root:$1$8BN1V9W7$X6hdKj6cSd7OJCxJUafJd/' | chpasswd -e
+   echo 'Ok'
+}
+
+function sshkey() {
+   echo -n 'Adding ssh key: '
+   mkdir -p /root/.ssh/
+   echo 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAAAgQC+I6ieD4dcMDWzgpLHSojfR7pB1yB1RePlYnRzzYTQghgcyI2NbdPyhL0GYA7D9jVyWTd1Bn6SHQjajmKCw467oBVSK69P42DkIX+/y6siGaTRdRV5VmC1dOLcOlcxExHB4YfAFbaEFR/R3sLSzhC/neIL+3cJUALF8jpRRkYG3w== root@undercloud' > /root/.ssh/authorized_keys
+   echo 'Ok'
+}
+
+rootpw
+sshkey

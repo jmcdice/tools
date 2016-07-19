@@ -1,0 +1,15 @@
+#!/usr/bin/bash
+#
+# Update the MOTD
+
+cat << EOF > /etc/motd
+
+~~~~~~ UNAUTHORIZED USERS WILL BE HANGED, DRAWN AND QUARTERED ~~~~~~
+
+Unauthorized access prohibited; all access and activities not explicitly
+authorized by ALU are unauthorized. All activities are monitored and logged.
+There is no privacy on this system. Unauthorized access and activities or
+any criminal activity will be reported to appropriate authorities.
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+EOF
